@@ -128,8 +128,15 @@
       if (session.completed) content.append(make('p', 'session-complete', '✓ Выполнено · отметка из проверенной истории тренировок'));
       if (session.duration_min) content.append(make('p', 'session-duration', formatDuration(session.duration_min)));
       if (session.goal) content.append(make('p', 'goal', session.goal));
+      if (session.warmup) content.append(make('p', 'session-warmup', sessionWattText(session.warmup, ftp)));
       if (session.main_set) content.append(make('p', 'session-main-set', sessionWattText(session.main_set, ftp)));
+      if (session.cooldown) content.append(make('p', 'session-cooldown', sessionWattText(session.cooldown, ftp)));
+      if (session.cadence) content.append(make('p', 'session-cadence', session.cadence));
       if (session.key_numbers) content.append(make('p', 'session-key-numbers', sessionWattText(session.key_numbers, ftp)));
+      const referenceFtp = Number(session.source_reference_ftp_watts || 0);
+      if (referenceFtp && (!ftp || referenceFtp > ftp)) {
+        content.append(make('p', 'session-ftp-warning', `Расчёт исходного блока: проектный FTP ${referenceFtp} Вт. До подтверждения FTP не повышайте нагрузку по этому ориентиру.`));
+      }
       day.append(dateLabel, content);
       details.append(day);
     });
