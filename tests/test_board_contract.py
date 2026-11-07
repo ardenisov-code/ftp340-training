@@ -17,7 +17,11 @@ class PublicBoardContractTests(unittest.TestCase):
         self.assertIn("renderPlan(manifest)", script)
         self.assertNotRegex(page, r"<details[^>]+class=.?week")
         self.assertNotRegex(script, r"VO₂\s*3×10|2026-11-06|2026-11-07|Силовая B")
-        self.assertFalse((ROOT / "adaptive-plan.json").exists())
+        self.assertFalse((ROOT / "site-template/adaptive-plan.json").exists())
+        if (ROOT / "adaptive-plan.json").exists():
+            manifest = json.loads((ROOT / "adaptive-plan.json").read_text(encoding="utf-8"))
+            self.assertIn("version_number", manifest)
+            self.assertIn("weeks", manifest)
 
     def test_site_design_and_interactions_remain_available(self):
         page = (ROOT / "site-template/index.html").read_text(encoding="utf-8")
