@@ -19,7 +19,7 @@ from typing import Any
 
 MAX_COMPRESSED_BYTES = 55_000
 MAX_MANIFEST_BYTES = 1_500_000
-MAX_CLOCK_SKEW = timedelta(minutes=15)
+MAX_CLOCK_SKEW = timedelta(hours=24)
 FIXED_TARGET = {
     "ftp_watts": 340,
     "date": "2027-06-06",
