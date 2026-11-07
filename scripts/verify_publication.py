@@ -30,15 +30,35 @@ def fetch_verified(url: str, version: int, digest: str, *, attempts: int = 30, d
     return False
 
 
+def fetch_raw_verified(url: str, digest: str, *, attempts: int = 30, delay: float = 5.0) -> bool:
+    for _ in range(attempts):
+        try:
+            request = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                if hashlib.sha256(response.read(2_000_000)).hexdigest() == digest:
+                    return True
+        except (OSError, urllib.error.URLError):
+            pass
+        time.sleep(delay)
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", required=True)
-    parser.add_argument("--version", type=int, required=True)
-    parser.add_argument("--sha256", required=True)
+    parser.add_argument("--version", type=int)
+    parser.add_argument("--sha256")
+    parser.add_argument("--raw-sha256")
     parser.add_argument("--attempts", type=int, default=30)
     parser.add_argument("--delay", type=float, default=5)
     args = parser.parse_args()
-    if not fetch_verified(args.url, args.version, args.sha256, attempts=args.attempts, delay=args.delay):
+    if args.raw_sha256:
+        passed = fetch_raw_verified(args.url, args.raw_sha256, attempts=args.attempts, delay=args.delay)
+    elif args.version is not None and args.sha256:
+        passed = fetch_verified(args.url, args.version, args.sha256, attempts=args.attempts, delay=args.delay)
+    else:
+        parser.error("provide --raw-sha256 or both --version and --sha256")
+    if not passed:
         print("FAIL: Pages did not serve the expected approved plan version")
         return 1
     print(f"PASS: Pages serves approved plan version {args.version}")

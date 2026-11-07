@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import copy
 import gzip
 import hashlib
 import hmac
@@ -29,13 +28,13 @@ FIXED_TARGET = {
 }
 PRIVATE_KEY_PATTERN = re.compile(
     r"(?:garmin|hrv|sleep|resting_hr|body_battery|training_readiness|"
-    r"medical|sacrum|coccyx|крестц|копчик|стресс-реакц|encrypted_token|session_token)",
+    r"medical|sacrum|coccyx|крест(?:ец|ц)|копчик|стресс-реакц|encrypted_token|session_token)",
     re.IGNORECASE,
 )
 PRIVATE_TEXT_PATTERN = re.compile(
     r"(?:hrv\s*[:=]|body\s*battery\s*[:=]|training\s*readiness\s*[:=]|"
     r"resting\s*heart\s*rate\s*[:=]|сон\s*[:=]|пульс\s*[:=]|"
-    r"крестц|копчик|стресс-реакц|медицин\w*|(?:^|\W)garmin(?:\W|$))",
+    r"крест(?:ец|ц)|копчик|sacrum|sacral|coccyx|стресс-реакц|медицин\w*|(?:^|\W)garmin(?:\W|$))",
     re.IGNORECASE,
 )
 
@@ -186,17 +185,8 @@ def validate_transition(current: dict[str, Any], incoming: dict[str, Any]) -> No
         baseline = incoming.get("baseline_weeks")
         if not isinstance(baseline, list) or not baseline:
             raise PublishValidationError("approved_baseline_missing")
-        baseline_manifest = dict(incoming, weeks=baseline)
-        baseline_sessions = _session_map(baseline_manifest)
-        approved_sessions = _session_map(incoming)
-        cutoff = date.fromisoformat(incoming["updated_at"])
-        for day, before in baseline_sessions.items():
-            if date.fromisoformat(day) <= cutoff:
-                after = approved_sessions.get(day)
-                if not after or any(before.get(key) != after.get(key) for key in (
-                    "title", "discipline", "duration_min", "main_set", "key_numbers", "goal"
-                )):
-                    raise PublishValidationError("historical_baseline_session_changed")
+        # PostgreSQL is authoritative: earlier approved changes may have
+        # legitimately altered baseline sessions before the first site sync.
         return
 
     if incoming.get("baseline_sha256") != current.get("baseline_sha256"):
@@ -272,25 +262,20 @@ def stage_event(event: dict[str, Any], manifest: dict[str, Any], digest: str, re
         raise PublishValidationError("stale_version_replay")
     if current_version and incoming_version != current_version + 1:
         raise PublishValidationError("version_gap")
-    if not current_version and incoming_version > 2:
-        raise PublishValidationError("initial_sync_version_gap")
+    if incoming_version < 1:
+        raise PublishValidationError("invalid_initial_version")
 
     versions = repo / "versions"
     versions.mkdir(parents=True, exist_ok=True)
-    if not current_version and incoming_version > 1:
-        baseline_weeks = manifest.get("baseline_weeks")
-        if not isinstance(baseline_weeks, list) or not baseline_weeks:
-            raise PublishValidationError("approved_baseline_missing")
     validate_transition(current, manifest)
-    if not current_version and incoming_version > 1:
-        baseline = copy.deepcopy(manifest)
-        baseline["version_number"] = 1
-        baseline["version_id"] = int(manifest.get("baseline_version_id", 1))
-        baseline["weeks"] = baseline_weeks
-        baseline["baseline_weeks"] = []
-        baseline["changes"] = []
-        baseline["last_adaptation_public"] = "Исходный утверждённый baseline программы."
-        (versions / "ftp340-plan-v1.json").write_bytes(canonical_json(baseline) + b"\n")
+    if not current_version:
+        baseline = {"baseline_sha256": manifest["baseline_sha256"],
+                    "baseline_version_id": manifest["baseline_version_id"],
+                    "weeks": manifest["baseline_weeks"]}
+        baseline_file = versions / ("baseline-" + manifest["baseline_sha256"] + ".json")
+        if baseline_file.exists() and _load_json(baseline_file) != baseline:
+            raise PublishValidationError("immutable_baseline_conflict")
+        baseline_file.write_bytes(canonical_json(baseline) + b"\n")
     if current_version:
         current_file = versions / f"ftp340-plan-v{current_version}.json"
         if current_file.exists():

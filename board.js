@@ -1,365 +1,46 @@
-/* Public FTP340 board. Approved sessions are loaded only from adaptive-plan.json. */
-(() => {
-  const GROUPS = {
-    plan: ['plan'],
-    control: ['ftp', 'monitor', 'tests'],
-    guide: ['analysis', 'principles', 'strength', 'food', 'macro'],
-  };
-  const ZONES = [
-    {name: 'Z1 · восстановление', low: 0, high: 55, rpe: '1–2'},
-    {name: 'Z2 · выносливость', low: 56, high: 75, rpe: '3–4'},
-    {name: 'Темп', low: 76, high: 87, rpe: '5'},
-    {name: 'Sweet spot', low: 88, high: 94, rpe: '6–7'},
-    {name: 'Порог', low: 95, high: 105, rpe: '7–8'},
-    {name: 'VO₂max', low: 106, high: 120, rpe: '8–9'},
-  ];
-  const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-
-  const localMoscowDate = () => {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date());
-    const part = type => parts.find(item => item.type === type)?.value || '';
-    return `${part('year')}-${part('month')}-${part('day')}`;
-  };
-
-  const parseDate = value => {
-    const [year, month, day] = String(value || '').split('-').map(Number);
-    if (!year || !month || !day) return null;
-    return new Date(year, month - 1, day, 12);
-  };
-
-  const formatDate = value => {
-    const date = parseDate(value);
-    if (!date) return String(value || '');
-    return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
-  };
-
-  const formatDuration = minutes => {
-    if (!Number.isFinite(Number(minutes)) || Number(minutes) <= 0) return '';
-    const total = Math.round(Number(minutes));
-    const hours = Math.floor(total / 60);
-    const rest = total % 60;
-    return hours ? `${hours}:${String(rest).padStart(2, '0')}` : `${rest} мин`;
-  };
-
-  const sessionWattText = (text, ftp) => String(text || '').replace(
-    /(\d{1,3})(?:\s*[–—-]\s*(\d{1,3}))?\s*%\s*(?:от\s*)?(?:FTP)?/gi,
-    (_match, low, high) => {
-      const start = Math.round(ftp * Number(low) / 100);
-      const end = high ? Math.round(ftp * Number(high) / 100) : null;
-      return `${low}${high ? `–${high}` : ''}% FTP (${start}${end ? `–${end}` : ''} Вт)`;
-    },
-  );
-
-  const make = (tag, className, text) => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
-
-  const sessionKind = discipline => ({
-    bike: ['k-z2', 'ВЕЛО'], strength: ['k-str', 'СИЛОВАЯ'],
-    rest: ['k-rest', 'ОТДЫХ'], recovery: ['k-rec', 'ВОССТ.'],
-  }[discipline] || ['k-rec', 'ТРЕНИРОВКА']);
-
-  const renderCalculator = manifest => {
-    const input = document.getElementById('ftp-reference');
-    const body = document.querySelector('.ztab tbody');
-    if (!input || !body) return;
-    const stored = Number(localStorage.getItem('ftp340_public_calc') || 0);
-    const source = Number(manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts || 0);
-    const initial = Number.isInteger(stored) && stored >= 100 && stored <= 600 ? stored : source;
-    input.value = initial || '';
-    input.placeholder = source ? String(source) : 'FTP';
-    const draw = () => {
-      const ftp = Number(input.value);
-      const value = Number.isInteger(ftp) && ftp >= 100 && ftp <= 600 ? ftp : 0;
-      body.replaceChildren();
-      ZONES.forEach(zone => {
-        const row = make('tr');
-        row.append(
-          make('td', '', zone.name),
-          make('td', '', `${zone.low}–${zone.high}%`),
-          make('td', 'calc-power', value ? `${Math.round(value * zone.low / 100)}–${Math.round(value * zone.high / 100)} Вт` : '—'),
-          make('td', '', `RPE ${zone.rpe}`),
-        );
-        body.append(row);
-      });
-      document.querySelectorAll('[data-power-percent]').forEach(node => {
-        node.textContent = value ? sessionWattText(node.dataset.powerPercent, value) : node.dataset.powerPercent;
-      });
-    };
-    input.addEventListener('input', () => {
-      const value = Number(input.value);
-      if (Number.isInteger(value) && value >= 100 && value <= 600) localStorage.setItem('ftp340_public_calc', String(value));
-      draw();
-    });
-    document.getElementById('ftp-reset')?.addEventListener('click', () => {
-      localStorage.removeItem('ftp340_public_calc');
-      input.value = source || '';
-      draw();
-    });
-    draw();
-  };
-
-  const renderWeek = (week, ftp) => {
-    const details = make('details', 'week');
-    details.id = `w${week.week_number}`;
-    const days = Array.isArray(week.days) ? week.days : [];
-    const dates = days.map(day => day.date).filter(Boolean).sort();
-    details.dataset.s = dates[0] || '';
-    details.dataset.e = dates[dates.length - 1] || '';
-    const summary = make('summary');
-    summary.append(
-      make('span', 'wn', `Неделя ${week.week_number}`),
-      make('span', 'wd', dates.length ? `${formatDate(dates[0])} – ${formatDate(dates[dates.length - 1])}` : ''),
-      make('span', 'tag load', week.block || 'План'),
-      make('span', 'wf', week.block_rationale || 'Утверждённый микроцикл программы.'),
-      make('span', 'wh', `${days.filter(day => day.discipline === 'bike').length} вело · ${days.filter(day => day.discipline === 'strength').length} силовых`),
-    );
-    details.append(summary);
-    days.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(session => {
-      const day = make('div', 'day');
-      const dateLabel = make('div', 'dl2', formatDate(session.date));
-      const year = parseDate(session.date)?.getFullYear();
-      dateLabel.append(make('small', '', year ? String(year) : ''));
-      const content = make('div');
-      const [tagClass, kind] = sessionKind(session.discipline);
-      const title = make('h4');
-      title.append(make('span', `tag ${tagClass}`, kind), document.createTextNode(` ${session.title || 'Тренировка'}`));
-      content.append(title);
-      if (session.completed) content.append(make('p', 'session-complete', '✓ Выполнено · отметка из проверенной истории тренировок'));
-      if (session.duration_min) content.append(make('p', 'session-duration', formatDuration(session.duration_min)));
-      if (session.goal) content.append(make('p', 'goal', session.goal));
-      if (session.main_set) content.append(make('p', 'session-main-set', sessionWattText(session.main_set, ftp)));
-      if (session.key_numbers) content.append(make('p', 'session-key-numbers', sessionWattText(session.key_numbers, ftp)));
-      day.append(dateLabel, content);
-      details.append(day);
-    });
-    return details;
-  };
-
-  const renderPlan = manifest => {
-    const mount = document.getElementById('approved-plan-calendar');
-    if (!mount) return;
-    mount.replaceChildren();
-    if (manifest.status === 'awaiting_approved_sync' || !Array.isArray(manifest.weeks) || !manifest.weeks.length) {
-      mount.append(make('div', 'card plan-loading', 'Утверждённая версия программы ещё не синхронизирована из TriCoach.'));
-      return;
-    }
-    const tools = make('div', 'plan-tools');
-    const intro = make('div');
-    intro.append(make('h2', '', 'План по неделям'), make('p', '', `Версия ${manifest.version_number} · обновлено ${manifest.updated_at || '—'}`));
-    const select = make('select');
-    select.setAttribute('aria-label', 'Выберите неделю');
-    const openButton = make('button', 'btn', 'Открыть неделю');
-    openButton.type = 'button';
-    const todayButton = make('button', 'btn', 'Открыть текущую неделю');
-    todayButton.type = 'button';
-    todayButton.dataset.action = 'open-today';
-    const expandButton = make('button', 'btn', 'Развернуть все');
-    expandButton.type = 'button';
-    expandButton.dataset.action = 'expand-weeks';
-    const collapseButton = make('button', 'btn', 'Свернуть все');
-    collapseButton.type = 'button';
-    collapseButton.dataset.action = 'collapse-weeks';
-    tools.append(intro, select, openButton, todayButton, expandButton, collapseButton);
-    mount.append(tools);
-    const ftp = Number(manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts || 0);
-    manifest.weeks.forEach(week => {
-      const details = renderWeek(week, ftp);
-      const option = make('option', '', `Неделя ${week.week_number} · ${formatDate(details.dataset.s)}`);
-      option.value = details.id;
-      select.append(option);
-      mount.append(details);
-    });
-    const setWeek = id => mount.querySelectorAll('details.week').forEach(week => {
-      const selected = week.id === id;
-      week.classList.toggle('selected-week', selected);
-      week.open = selected;
-    });
-    select.addEventListener('change', () => setWeek(select.value));
-    openButton.addEventListener('click', () => setWeek(select.value));
-    const today = localMoscowDate();
-    const active = [...mount.querySelectorAll('details.week')].find(week => week.dataset.s <= today && today <= week.dataset.e);
-    select.value = active?.id || select.options[0]?.value || '';
-    setWeek(select.value);
-    todayButton.addEventListener('click', () => window.openToday());
-    expandButton.addEventListener('click', () => window.toggleAll(true));
-    collapseButton.addEventListener('click', () => window.toggleAll(false));
-  };
-
-  const renderMacro = manifest => {
-    const mount = document.getElementById('macro-summary');
-    if (!mount) return;
-    mount.replaceChildren();
-    const weeks = manifest.weeks || [];
-    if (!weeks.length) {
-      mount.append(make('p', '', 'Макроциклы появятся после синхронизации утверждённого плана из TriCoach.'));
-      return;
-    }
-    const groups = new Map();
-    weeks.forEach(week => {
-      const label = week.block || 'Тренировочный блок';
-      if (!groups.has(label)) groups.set(label, []);
-      groups.get(label).push(week);
-    });
-    groups.forEach((blockWeeks, label) => {
-      const first = blockWeeks.flatMap(week => week.days || []).map(day => day.date).filter(Boolean).sort()[0];
-      const last = blockWeeks.flatMap(week => week.days || []).map(day => day.date).filter(Boolean).sort().slice(-1)[0];
-      const card = make('article', 'card');
-      card.append(make('h3', '', label));
-      card.append(make('p', '', `${first ? formatDate(first) : ''}${last ? ` – ${formatDate(last)}` : ''} · ${blockWeeks.length} недель`));
-      if (blockWeeks[0]?.block_rationale) card.append(make('p', '', blockWeeks[0].block_rationale));
-      mount.append(card);
-    });
-  };
-
-  const renderDashboard = manifest => {
-    const dashboard = document.querySelector('[data-pane="now"]');
-    if (!dashboard) return;
-    dashboard.replaceChildren();
-    const target = manifest.target || {ftp_watts: 340, date: '2027-06-06'};
-    const ftp = manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts;
-    const today = localMoscowDate();
-    const next = (manifest.weeks || []).flatMap(week => week.days || [])
-      .filter(day => day.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
-    const hero = make('div', 'hero');
-    const left = make('div');
-    left.append(make('p', 'eyebrow', 'World-Class Cycling Coach'), make('h1', '', 'Набираем мощность без лишнего шума.'), make('p', 'hero-copy', `Цель программы: FTP ${target.ftp_watts} Вт к ${target.date}.`));
-    const card = make('article', 'next-card');
-    card.append(make('small', '', 'Следующая сессия из утверждённого плана'));
-    if (next) {
-      card.append(make('h2', '', next.title || 'Тренировка'));
-      card.append(make('div', 'watts', formatDuration(next.duration_min)));
-      card.append(make('p', '', `${formatDate(next.date)}${next.main_set ? ` · ${sessionWattText(next.main_set, Number(ftp || 0))}` : ''}`));
-    } else {
-      card.append(make('h2', '', 'План пока не синхронизирован'));
-      card.append(make('p', '', 'Текущие тренировки появятся после получения утверждённой версии из TriCoach.'));
-    }
-    hero.append(left, card);
-    const metrics = make('div', 'metrics');
-    metrics.append(
-      make('article', 'metric', `FTP ${ftp || '—'} Вт`),
-      make('article', 'metric', `Версия ${manifest.version_number || '—'}`),
-      make('article', 'metric', `${(manifest.weeks || []).length} недель`),
-      make('article', 'metric', `Цель ${target.ftp_watts} Вт · ${target.date}`),
-    );
-    dashboard.append(hero, metrics);
-  };
-
-  const init = async () => {
-    const wrap = document.querySelector('.wrap');
-    if (!wrap || wrap.dataset.boardReady) return;
-    wrap.dataset.boardReady = 'true';
-    document.title = 'ВелоМощь · FTP 340';
-    const sections = {};
-    [...wrap.children].filter(node => node.matches?.('h2[id]')).forEach(heading => {
-      const section = document.createElement('section');
-      section.dataset.section = heading.id;
-      heading.before(section);
-      section.append(heading);
-      let next = section.nextSibling;
-      while (next && !(next.nodeType === 1 && next.matches('h2[id]'))) {
-        const moving = next;
-        next = next.nextSibling;
-        section.append(moving);
-      }
-      sections[heading.id] = section;
-    });
-
-    const shell = make('header', 'board-shell');
-    const brand = make('div', 'brand-row');
-    brand.append(make('div', 'brand', '↗ ВелоМощь'), make('span', 'date-chip', 'Цель FTP 340 · 06.06.2027'));
-    const tabs = make('nav', 'tabbar');
-    tabs.setAttribute('aria-label', 'Разделы борда');
-    [['now', 'Сейчас'], ['plan', 'План'], ['control', 'Контроль'], ['guide', 'База знаний']].forEach(([key, label], index) => {
-      const button = make('button', 'tab', label);
-      button.type = 'button';
-      button.dataset.tab = key;
-      button.setAttribute('aria-selected', String(index === 0));
-      tabs.append(button);
-    });
-    shell.append(brand, tabs);
-    wrap.prepend(shell);
-
-    const dashboard = make('section', 'pane active');
-    dashboard.dataset.pane = 'now';
-    const panes = {now: dashboard};
-    Object.entries(GROUPS).forEach(([key, ids]) => {
-      const pane = make('div', 'pane');
-      pane.dataset.pane = key;
-      ids.forEach(id => sections[id] && pane.append(sections[id]));
-      panes[key] = pane;
-    });
-    shell.after(dashboard, panes.plan, panes.control, panes.guide);
-
-    const guideSections = [...panes.guide.querySelectorAll('section')];
-    if (guideSections.length) {
-      const switcher = make('div', 'guide-switch');
-      guideSections.forEach((section, index) => {
-        const button = make('button', '', section.querySelector('h2')?.textContent.replace(/^\d+\.\s*/, '') || 'Раздел');
-        button.type = 'button';
-        button.classList.toggle('active', index === 0);
-        button.addEventListener('click', () => {
-          guideSections.forEach(item => item.classList.toggle('show-guide', item === section));
-          [...switcher.children].forEach(item => item.classList.toggle('active', item === button));
-        });
-        switcher.append(button);
-        section.classList.toggle('show-guide', index === 0);
-      });
-      panes.guide.prepend(switcher);
-    }
-    tabs.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
-      Object.entries(panes).forEach(([key, pane]) => pane.classList.toggle('active', key === tab.dataset.tab));
-      tabs.querySelectorAll('.tab').forEach(item => item.setAttribute('aria-selected', String(item === tab)));
-      window.scrollTo({top: 0, behavior: 'smooth'});
-    }));
-    wrap.querySelectorAll(':scope > nav a[href^="#"]').forEach(link => link.addEventListener('click', () => {
-      const section = sections[link.getAttribute('href').slice(1)];
-      if (!section) return;
-      const pane = section.closest('.pane');
-      if (pane) {
-        Object.values(panes).forEach(item => item.classList.toggle('active', item === pane));
-        if (pane.dataset.pane === 'guide') {
-          panes.guide.querySelectorAll('section').forEach(item => item.classList.toggle('show-guide', item === section));
-          panes.guide.querySelectorAll('.guide-switch button').forEach((button, index) => {
-            button.classList.toggle('active', guideSections[index] === section);
-          });
-        }
-      }
-    }));
-
-    try {
-      const response = await fetch(`adaptive-plan.json?cache=${Date.now()}`, {cache: 'no-store'});
-      if (!response.ok) throw new Error('plan_unavailable');
-      const manifest = await response.json();
-      renderDashboard(manifest);
-      renderPlan(manifest);
-      renderMacro(manifest);
-      renderCalculator(manifest);
-    } catch (_error) {
-      const message = document.getElementById('approved-plan-calendar');
-      if (message) message.replaceChildren(make('div', 'card plan-loading', 'Не удалось загрузить утверждённый план. Показ старых тренировок отключён.'));
-      renderMacro({weeks: []});
-      renderDashboard({target: {ftp_watts: 340, date: '2027-06-06'}, current_ftp: {}, weeks: [], version_number: null});
-    }
-  };
-
-  window.toggleAll = open => document.querySelectorAll('details.week').forEach(week => {
-    week.open = Boolean(open);
-    week.classList.toggle('selected-week', Boolean(open));
+/* ВелоМощь: интерфейс поверх исходного плана. Расчёт FTP остаётся в index.html. */
+document.addEventListener('DOMContentLoaded', () => {
+  document.title='ВелоМощь · FTP 340';
+  const wrap = document.querySelector('.wrap');
+  if (!wrap || wrap.dataset.boardReady) return;
+  wrap.dataset.boardReady = 'true';
+  const groups = {plan:['plan'],control:['ftp','monitor','tests'],guide:['analysis','principles','strength','food','macro']};
+  const sections = {};
+  [...wrap.children].filter(el => el.matches && el.matches('h2[id]')).forEach(h2 => {
+    const section = document.createElement('section'); section.dataset.section = h2.id; h2.before(section); section.append(h2);
+    let next = section.nextSibling;
+    while (next && !(next.nodeType === 1 && next.matches('h2[id]'))) { const moving=next; next=next.nextSibling; section.append(moving); }
+    sections[h2.id]=section;
   });
-  window.openToday = () => {
-    const today = localMoscowDate();
-    const week = [...document.querySelectorAll('details.week')].find(item => item.dataset.s <= today && today <= item.dataset.e);
-    if (week) {
-      document.querySelectorAll('details.week').forEach(item => item.classList.toggle('selected-week', item === week));
-      week.open = true;
-      week.scrollIntoView({behavior: 'smooth'});
-    }
-  };
-  document.addEventListener('DOMContentLoaded', init);
-})();
+  const week0=document.getElementById('w0');
+  if(week0){week0.dataset.s='2026-11-04';week0.dataset.e='2026-11-08';week0.innerHTML=`<summary><span class="wn">Неделя 0</span><span class="wd">4 ноя – 8 ноя</span><span class="tag dl">Ввод</span><span class="wf">Старт после интенсивности 3 ноября: сначала восстановление, затем адаптация.</span><span class="wh">вело 3:30–3:45 · силовых 1</span></summary><div class="day"><div class="dl2">Ср 4<small>ноя</small></div><div><h4><span class="tag k-rec">ВОССТ.</span> Восстановительное вращение · 45–60'</h4><div class="goal">Первый день программы. После 40/20 3 ноября не проверяем форму ещё раз: возвращаем ноги и крестец к нейтральному состоянию.</div><ol><li>45–60' @ <span class="pw" data-b="0" data-lo="55" data-hi="60">149–162 Вт</span> <span class="pct">(55–60%)</span>, каденс 90+.</li><li>Без ускорений, low-cad и силовой. Каждые 15' встань на 20–30 с.</li><li>Крестец 3+/10 до старта или во время — остановиться; вместо вело: 15–20' мягкой мобилизации.</li></ol><div class="meta"><span>RPE: <b>2–3</b></span><span>Пульс: <b>спокойно</b></span><span>Каденс: <b>90+</b></span></div></div></div><div class="day"><div class="dl2">Чт 5<small>ноя</small></div><div><h4><span class="tag k-str">СИЛОВАЯ</span> Силовая A · адаптация · 30–35'</h4><div class="goal">Техника и переносимость нагрузки. Никакой осевой тяжести и отказа.</div><ul><li>Разминка 8': мост 2×10, 90/90, кошка‑корова.</li><li>Гоблет‑присед на ящик 3×10, сплит‑присед 3×8/нога, ягодичный мост 3×12.</li><li>Dead bug 3×8/сторона, боковая планка 3×30 с, Pallof‑жим 3×10/сторона.</li></ul><div class="notes">⚠ Крестец ≥3/10: убрать присед; оставить кор и мягкую мобильность.</div></div></div><div class="day"><div class="dl2">Пт 6<small>ноя</small></div><div><h4><span class="tag k-rest">ОТДЫХ</span> Отдых и контроль</h4><div class="goal">Сон, питание, короткая прогулка. Ничего не компенсировать.</div><div class="meta"><span>Утро: <b>сон · HRV · пульс покоя · крестец 0–10</b></span></div></div></div><div class="day"><div class="dl2">Сб 7<small>ноя</small></div><div><h4><span class="tag k-z2">ВЕЛО Z2</span> Z2 выносливость · 1:15</h4><div class="goal">Вернуть ровную аэробную работу без «зубцов» мощности.</div><ol><li>Весь объём @ <span class="pw" data-b="0" data-lo="62" data-hi="72">167–194 Вт</span> <span class="pct">(62–72%)</span>, каденс 85–95.</li><li>Станок: вентилятор на максимум, вставать на 20–30 с каждые 15'.</li></ol><div class="meta"><span>RPE: <b>3–4</b></span><span>Пульс: <b>≈125–145</b></span></div></div></div><div class="day"><div class="dl2">Вс 8<small>ноя</small></div><div><h4><span class="tag k-z2">ВЕЛО Z2</span> Z2 выносливость · 1:30</h4><div class="goal">Объём важнее темпа. Проверяем посадку и реакцию крестца.</div><ol><li>Весь объём @ <span class="pw" data-b="0" data-lo="62" data-hi="72">167–194 Вт</span> <span class="pct">(62–72%)</span>, каденс 85–95.</li><li>Если всё зелёное: в середине 3×6' @ <span class="pw" data-b="0" data-lo="78" data-hi="82">211–221 Вт</span> <span class="pct">(78–82%)</span> через 4' легко; иначе просто ровная Z2.</li></ol><div class="meta"><span>RPE: <b>3–4</b></span><span>Пульс: <b>≈125–145</b></span></div></div></div>`;}
+  const day=(date,tag,kind,title,goal,work,meta='')=>`<div class="day"><div class="dl2">${date}</div><div><h4><span class="tag ${tag}">${kind}</span> ${title}</h4><div class="goal">${goal}</div>${work}<div class="meta">${meta}</div></div></div>`;
+  if(week0){week0.innerHTML=`<summary><span class="wn">Неделя 0</span><span class="wd">4 ноя – 8 ноя</span><span class="tag dl">Разгон</span><span class="wf">Силовая + полноценный 30/15 VO₂ + длинная Z2 с темпом.</span><span class="wh">вело 4:20 · силовых 2</span></summary>${day('Ср 4<small>ноя</small>','k-str','СИЛОВАЯ','Силовая A · адаптация · 40\'','Первый тренировочный день. Работаем, но без осевой тяжести и без отказа.','<ul><li>Разминка 8\': мост 2×10, 90/90, кошка‑корова.</li><li>Гоблет‑присед на ящик 3×10, сплит‑присед 3×8/нога, хип‑траст 3×10.</li><li>Dead bug 3×8/сторона, боковая планка 3×30 с, Pallof‑жим 3×10/сторона.</li></ul>','<span>RPE: <b>6</b></span><span>Крестец: <b>3+/10 — без приседа</b></span>')}${day('Чт 5<small>ноя</small>','k-z2','ВЕЛО Z2','Z2 + высокий каденс · 1:15','Аэробный объём для пятничного VO₂. Это не «день жалости», а подготовка к качественной работе.','<ol><li>Z2 @ <span class="pw" data-b="0" data-lo="62" data-hi="72">167–194 Вт</span> · каденс 85–95.</li><li>В середине 6×20 с на 110+ об/мин при Z2, между ними 2\' легко.</li></ol>','<span>RPE: <b>3–4</b></span>')}${day('Пт 6<small>ноя</small>','k-key','КЛЮЧЕВАЯ','VO₂: 3×10×30/15 · 1:05','Первый полноценный короткоинтервальный VO₂‑стимул. Цель — много времени близко к VO₂max, не спринт.','<ol><li>Разминка 20\': плавно до Z2, затем 3×1\' @ 95–100% FTP.</li><li><b>3 серии по 10×30 с</b> @ <span class="pw" data-b="0" data-lo="118" data-hi="124">319–335 Вт</span> / 15 с легко; между сериями 3\' легко. Каденс 95–105.</li><li>Заминка 10\'. Если мощность падает &gt;3% или техника распадается — третью серию не начинай.</li></ol>','<span>RPE: <b>8–9</b></span><span>Питание: <b>30–60 г углеводов/ч</b></span>')}${day('Сб 7<small>ноя</small>','k-str','СИЛОВАЯ','Силовая B · корпус и односторонняя работа · 35\'','Поддерживаем силу без тяжёлой оси после VO₂.','<ul><li>Степ‑ап 3×8/нога, жим ногами 3×12 RPE 6, одноногий мост 3×10.</li><li>McGill big‑3 — 2 круга.</li></ul>','<span>RPE: <b>6</b></span>')}${day('Вс 8<small>ноя</small>','k-long','ДЛИННАЯ','Длинная Z2 + tempo · 2:00','Завершаем микроцикл объёмом и устойчивой работой, а не «докатыванием».','<ol><li>Z2 @ <span class="pw" data-b="0" data-lo="62" data-hi="72">167–194 Вт</span>, каденс 85–95.</li><li>Во второй половине 2×12\' @ <span class="pw" data-b="0" data-lo="88" data-hi="92">238–248 Вт</span>, 6\' легко.</li></ol>','<span>RPE: <b>4–5</b></span><span>Крестец: <b>0–2/10</b></span>')}`;}
+  const week1=document.getElementById('w1');
+  if(week1){week1.innerHTML=`<summary><span class="wn">Неделя 1</span><span class="wd">9 ноя – 15 ноя</span><span class="tag load">Нагрузка</span><span class="wf">Быстрый возврат: порог 3×12′, VO₂ 3×12×30/15, длинная с sweet‑spot.</span><span class="wh">вело 6:30 · силовых 2</span></summary>${day('Пн 9<small>ноя</small>','k-rest','ОТДЫХ','Отдых','Адаптация к блоку. Сон и питание — часть нагрузки.','<ul><li>Прогулка и 10\' мобильности допустимы; тренировку не добавлять.</li></ul>')}${day('Вт 10<small>ноя</small>','k-key','КЛЮЧЕВАЯ','Порог: 3×12\' · 1:15','Развиваем слабое место 20–60 минут. Это контролируемая пороговая работа, не тест.','<ol><li>Разминка 20\', 3×1\' @ 95–100% FTP.</li><li>3×12\' @ <span class="pw" data-b="1" data-lo="94" data-hi="98">254–265 Вт</span>, отдых 4\' легко, каденс 88–95.</li><li>Если последний повтор требует RPE 9 или пульс дрейфует на 7+ уд/мин — следующий раз оставляем нижнюю границу.</li></ol>','<span>RPE: <b>7–8</b></span>')}${day('Ср 11<small>ноя</small>','k-str','СИЛОВАЯ','Силовая A · 45–50\'','Постепенно повышаем силу ног и устойчивость таза.','<ul><li>Гоблет‑присед 3×8–10, сплит‑присед 3×8/нога, хип‑траст 3×8–10.</li><li>Кор: Pallof, боковая планка, bird‑dog.</li></ul>','<span>RPE: <b>6–7</b></span><span>Крестец: <b>3+/10 — заменить на жим ногами</b></span>')}${day('Чт 12<small>ноя</small>','k-z2','ВЕЛО Z2','Z2 + нейромышечные ускорения · 1:20','Поддерживаем объём и скорость педалирования между ключевыми.','<ol><li>Z2 @ <span class="pw" data-b="1" data-lo="62" data-hi="72">167–194 Вт</span>.</li><li>6×20 с каденс 110+ при Z2; не повышать мощность.</li></ol>','<span>RPE: <b>3–4</b></span>')}${day('Пт 13<small>ноя</small>','k-key','КЛЮЧЕВАЯ','VO₂: 3×12×30/15 · 1:15','Более плотный короткоинтервальный VO₂‑день. Это прогрессия, не «всё что можешь».','<ol><li>Разминка 20\' как в пятницу недели 0.</li><li><b>3 серии по 12×30 с</b> @ <span class="pw" data-b="1" data-lo="118" data-hi="124">319–335 Вт</span> / 15 с легко; 3\' между сериями.</li><li>Каденс 95–105. Последняя серия отменяется, если на второй серии мощность не держится в пределах 3%.</li></ol>','<span>RPE: <b>8–9</b></span>')}${day('Сб 14<small>ноя</small>','k-str','СИЛОВАЯ','Силовая B · 35–40\'','Односторонняя работа, стабилизация таза и кор.','<ul><li>Степ‑ап 3×8/нога, жим ногами 3×12, одноногий мост 3×10, McGill big‑3.</li></ul>','<span>RPE: <b>6</b></span>')}${day('Вс 15<small>ноя</small>','k-long','ДЛИННАЯ','Длинная Z2 + sweet‑spot · 2:15','Переносим пороговую выносливость на усталость.','<ol><li>Z2 @ <span class="pw" data-b="1" data-lo="62" data-hi="72">167–194 Вт</span>.</li><li>Во второй половине 2×15\' @ <span class="pw" data-b="1" data-lo="90" data-hi="92">243–248 Вт</span>, 7\' легко.</li></ol>','<span>RPE: <b>4–6</b></span>')}`;}
+  const week2=document.getElementById('w2');
+  if(week2){const summary=week2.querySelector('.wf');if(summary)summary.textContent='Тестовая неделя: 5′ в пятницу и 20′ в воскресенье — это две высокоинтенсивные сессии, поэтому отдельный VO₂ не добавляем.';}
+  [week0,week1].filter(Boolean).forEach(week=>week.querySelectorAll('.day').forEach(day=>{if(day.querySelector('h4')?.textContent.includes('Z2'))day.querySelectorAll('.pw[data-lo="62"][data-hi="72"]').forEach(power=>{power.dataset.lo='68';power.dataset.hi='74';});}));
+  if(typeof recalc==='function') recalc();
+  const shell = document.createElement('header'); shell.className='board-shell';
+  shell.innerHTML=`<div class="brand-row"><div class="brand"><span class="bolt">↗</span>ВелоМощь <span class="date-chip">Старт · 04.11.2026</span></div><span class="date-chip">Цель: FTP 340 к 06.06.2027</span></div><nav class="tabbar" aria-label="Разделы борда"><button class="tab" data-tab="now" aria-selected="true">Сейчас</button><button class="tab" data-tab="plan" aria-selected="false">План</button><button class="tab" data-tab="control" aria-selected="false">Контроль</button><button class="tab" data-tab="guide" aria-selected="false">База знаний</button></nav>`;
+  wrap.prepend(shell);
+  const dash = document.createElement('section'); dash.className='pane active'; dash.dataset.pane='now';
+  dash.innerHTML=`<div class="hero"><div><p class="eyebrow">Grand Tour mode · день 1</p><h1>Набираем <em>мощность</em><br>без лишнего шума.</h1><p class="hero-copy">Первый блок начинается с контроля: восстановиться после 3 ноября, закрепить устойчивую посадку и не превращать старт в экзамен.</p></div><article class="next-card"><small>Следующее действие</small><h2>Восстановительное вращение</h2><div class="watts">149–162 Вт</div><p>45–60 мин · каденс 90+ · RPE 2–3<br>Если крестец 3+/10 — только мобилизация.</p></article></div><div class="metrics"><article class="metric"><b class="lime">270 Вт</b><span>рабочий FTP · пока без изменения</span></article><article class="metric"><b class="cyan">2</b><span>входные сессии зафиксированы</span></article><article class="metric"><b>31</b><span>неделя до финального теста</span></article><article class="metric"><b>340 Вт</b><span>цель · 06 июня 2027</span></article></div><aside class="tour-insert" aria-label="Мотивация: горный этап"><div class="tour-photo" role="img" aria-label="Велосипедист в дождливых Альпах"></div><div class="tour-copy"><p class="tour-kicker">Вдохновение · французские горные этапы</p><h2>Не нужно выигрывать сегодня. Нужно заслужить следующий километр.</h2><p>Чемпионская работа редко выглядит как кино: это ещё один ровный интервал, правильное питание и способность остановиться до ошибки. Так и собирается 340.</p><div class="tour-mantra"><i>↗</i><span>Дисциплина — это форма мотивации.</span></div></div></aside><div class="dashboard-grid"><article class="checkin"><h2>Верификация старта</h2><div class="signal"><i class="dot"></i><div><strong>Рабочий FTP остаётся 270 Вт</strong><span>3×10′ на 280→270 и 10′ на 270 — полезные наблюдения, но не тест для пересмотра FTP.</span></div></div><div class="signal"><i class="dot warn"></i><div><strong>Интенсивность 3 ноября уже была</strong><span>5×40/20 @ 350 Вт — сегодня не добавляем работу: ватты остаются потолком.</span></div></div><div class="signal"><i class="dot stop"></i><div><strong>Крестец — стоп‑сигнал</strong><span>0–2/10: продолжаем. 3–4/10: без низкого каденса и осевой силы. 5+/10 или ночная боль: стоп и врач.</span></div></div></article><article class="review-card"><h2>Решение прошло три линзы</h2><div class="review-grid"><div class="lens"><b>Спортсмен</b><p>Сессия на 4 ноября должна ощущаться выполнимой, а не как ещё одна проверка формы.</p></div><div class="lens"><b>Критик</b><p>Двух коротких наблюдений недостаточно, чтобы поднимать FTP или наращивать объём.</p></div><div class="lens"><b>Chief UI</b><p>Первый экран отвечает на три вопроса: что делать, с какой мощностью и когда остановиться.</p></div></div></article></div><div class="session-list" aria-label="Ближайшие занятия"><article class="session-card complete"><time>до плана</time><h3>3×10′ @ 280→270</h3><p>Вводная проверка на станке. Учтено как факт, не как тест FTP.</p></article><article class="session-card complete"><time>вт · 03.11</time><h3>5×40/20 @ 350</h3><p>Затем 10′ @ 270. Интенсивность на сегодня уже получена.</p></article><article class="session-card today"><time>ср · 04.11</time><h3>Восстановление</h3><p>45–60′ Z1 @ 149–162 Вт или мобилизация при дискомфорте.</p></article><article class="session-card"><time>чт · 05.11</time><h3>Силовая A</h3><p>Адаптация, техника, без осевой тяжести и отказа.</p></article><article class="session-card"><time>сб–вс · 07–08.11</time><h3>Две Z2-сессии</h3><p>1:15 и 1:30. Ровно, каденс 85–95, контроль крестца.</p></article></div><p class="data-note">Источник стартовых фактов: журнал пользователя. Пульс, RPE, каденс и оценка крестца по сессиям пока не переданы — борд их не дорисовывает.</p>`;
+  dash.querySelector('.hero-copy').textContent='Нормальный старт после двух качественных вводных сессий: силовая сегодня, полноценный VO₂ в пятницу и длинная с tempo в воскресенье.';
+  dash.querySelector('.next-card').innerHTML='<small>Следующее действие</small><h2>Силовая A</h2><div class="watts">40 минут</div><p>Адаптация силы · RPE 6<br>Крестец 3+/10 — убрать присед, оставить кор.</p>';
+  const cards=dash.querySelectorAll('.session-card');
+  dash.querySelectorAll('.signal span')[1].textContent='Интенсивная велоработа была во вторник; сегодня силовая без дополнительной велосессии. Полный VO₂ — в пятницу.';
+  cards[2].innerHTML='<time>ср · 04.11</time><h3>Силовая A</h3><p>Гоблет‑присед, сплит‑присед, хип‑траст, кор. RPE 6.</p>';
+  cards[3].innerHTML='<time>чт · 05.11</time><h3>Z2 + каденс</h3><p>1:15 в Z2 и 6×20 с на 110+ об/мин.</p>';
+  cards[4].innerHTML='<time>пт–вс · 06–08.11</time><h3>VO₂ + длинная</h3><p>3×10×30/15, силовая B и 2:00 Z2 + 2×12 tempo.</p>';
+  const panes={now:dash};
+  Object.entries(groups).forEach(([key,ids])=>{const pane=document.createElement('div');pane.className='pane';pane.dataset.pane=key;ids.forEach(id=>sections[id]&&pane.append(sections[id]));panes[key]=pane;});
+  shell.after(dash,panes.plan,panes.control,panes.guide);
+  const introDate=sections.ftp?.querySelector('table tr:nth-child(2) td:nth-child(3)');
+  if(introDate) introDate.textContent='4 ноя – 8 ноя';
+  const planSection=sections.plan;
+  if(planSection){const weeks=[...planSection.querySelectorAll('details.week')];const tools=document.createElement('div');tools.className='plan-tools';tools.innerHTML=`<div><h2>План по неделям</h2><p>Открыта только выбранная неделя. Подробности остаются в исходном плане, но больше не образуют бесконечную ленту.</p></div><label><span class="sr-only">Выберите неделю</span><select aria-label="Выберите неделю"></select></label><button type="button">Открыть выбранную</button>`;const select=tools.querySelector('select');weeks.forEach((week,i)=>{const option=document.createElement('option');option.value=week.id;option.textContent=`${week.querySelector('.wn')?.textContent} · ${week.querySelector('.wd')?.textContent}`;option.selected=i===0;select.append(option);});const setWeek=id=>weeks.forEach(week=>{const open=week.id===id;week.classList.toggle('selected-week',open);if(open)week.open=true;});select.addEventListener('change',()=>setWeek(select.value));tools.querySelector('button').addEventListener('click',()=>setWeek(select.value));planSection.querySelector('h2').after(tools);setWeek('w0');}
+  const guideSections=[...panes.guide.querySelectorAll('section')];if(guideSections.length){const sw=document.createElement('div');sw.className='guide-switch';guideSections.forEach((section,i)=>{const btn=document.createElement('button');btn.type='button';btn.textContent=section.querySelector('h2')?.textContent.replace(/^\d+\.\s*/,'')||'Раздел';btn.classList.toggle('active',i===0);btn.addEventListener('click',()=>{guideSections.forEach(x=>x.classList.toggle('show-guide',x===section));[...sw.children].forEach(x=>x.classList.toggle('active',x===btn));});sw.append(btn);section.classList.toggle('show-guide',i===0);});panes.guide.prepend(sw);}
+  document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{const target=tab.dataset.tab;Object.entries(panes).forEach(([key,pane])=>pane.classList.toggle('active',key===target));document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',String(x===tab)));window.scrollTo({top:0,behavior:'smooth'});}));
+});

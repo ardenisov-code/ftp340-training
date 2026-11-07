@@ -16,6 +16,7 @@ from scripts.publish_plan import (
     restore_previous_manifest,
     stage_event,
 )
+from scripts.build_pages import build
 
 
 SECRET = "test-secret-that-is-at-least-32-bytes-long"
@@ -85,6 +86,26 @@ def event_for(value, *, nonce=None):
 
 
 class ApprovedPlanPublicationTests(unittest.TestCase):
+    def test_artifact_and_legacy_rollback_keep_correct_site(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            repo = base / "repo"
+            repo.mkdir()
+            import shutil
+            for name in ("index.html", "board.js", "board.css", ".nojekyll"):
+                shutil.copy2(root / name, repo / name)
+            shutil.copytree(root / "site-template", repo / "site-template")
+            public = manifest(5)
+            (repo / "adaptive-plan.json").write_bytes(canonical_json(public))
+            build(repo, base / "new", "adaptive")
+            self.assertEqual(json.loads((base / "new/adaptive-plan.json").read_text()), public)
+            self.assertIn("approved-plan-calendar", (base / "new/index.html").read_text())
+            self.assertFalse((base / "new/site-template").exists())
+            build(repo, base / "rollback", "legacy")
+            self.assertEqual((base / "rollback/index.html").read_bytes(), (root / "index.html").read_bytes())
+            self.assertFalse((base / "rollback/adaptive-plan.json").exists())
+
     def test_authentication_and_fixed_target_and_privacy_gate(self):
         event = event_for(manifest())
         payload, public, _ = decode_event(event, SECRET)
@@ -100,6 +121,11 @@ class ApprovedPlanPublicationTests(unittest.TestCase):
         private = manifest()
         private["current_ftp"]["sleep_score"] = 80
         with self.assertRaisesRegex(PublishValidationError, "private_key"):
+            decode_event(event_for(private), SECRET)
+
+        private = manifest()
+        private["weeks"][0]["days"][0]["goal"] = "Боль в крестец"
+        with self.assertRaisesRegex(PublishValidationError, "private_text"):
             decode_event(event_for(private), SECRET)
 
         wrong_goal = manifest()
@@ -124,7 +150,8 @@ class ApprovedPlanPublicationTests(unittest.TestCase):
             ev, decoded, digest = decode_event(e2, SECRET)
             self.assertEqual(stage_event(ev, decoded, digest, repo)[0], "staged")
             self.assertEqual(stage_event(ev, decoded, digest, repo)[0], "duplicate")
-            self.assertTrue((repo / "versions/ftp340-plan-v1.json").exists())
+            self.assertTrue((repo / ("versions/baseline-" + "a" * 64 + ".json")).exists())
+            self.assertFalse((repo / "versions/ftp340-plan-v1.json").exists())
             self.assertTrue((repo / "versions/ftp340-plan-v2.json").exists())
 
             m3 = manifest(3)
@@ -141,6 +168,16 @@ class ApprovedPlanPublicationTests(unittest.TestCase):
             self.assertEqual(state["current_version"], 2)
             current_hash = hashlib.sha256(canonical_json(previous)).hexdigest()
             self.assertEqual(state["manifest_sha256"], current_hash)
+
+    def test_initial_sync_accepts_current_version_without_inventing_prior_versions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            public = manifest(7)
+            public["weeks"][0]["days"][0]["title"] = "Previously approved historical session"
+            event, decoded, digest = decode_event(event_for(public), SECRET)
+            self.assertEqual(stage_event(event, decoded, digest, repo)[0], "staged")
+            self.assertTrue((repo / "versions/ftp340-plan-v7.json").exists())
+            self.assertFalse((repo / "versions/ftp340-plan-v1.json").exists())
 
     def test_stale_gap_and_same_version_content_replay_are_rejected(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -1,48 +1,52 @@
 # FTP 340 public training board
 
-`adaptive-plan.json` is the public presentation of the approved plan from
-TriCoach PostgreSQL. It does not become an independent plan source. The board
-loads calendar weeks, macrocycle summaries, completion flags, and calculator
-reference FTP from this file; it does not embed day-by-day sessions in HTML or
-JavaScript.
+PostgreSQL in TriCoach is the source of the approved plan. The adaptive Pages
+artifact is built from `site-template/` and the validated `adaptive-plan.json`.
+The site is not built by a push from `GITHUB_TOKEN`: the receiver explicitly
+uses `configure-pages`, `upload-pages-artifact` and `deploy-pages`, then verifies
+the public JSON version and canonical SHA-256 before reporting success.
 
-## Cross-repository publication
+## Safe first publication
 
-The `Publish TriCoach-approved plan` workflow accepts only the
-`tricoach_plan_approved` repository-dispatch event. It verifies the short-lived
-HMAC signature and nonce, validates the fixed FTP/date target and privacy
-contract, rejects stale/replayed/gapped versions, and ensures the original
-baseline and completed sessions remain unchanged. Each accepted release is
-stored as an immutable `versions/ftp340-plan-vN.json` file before
-`adaptive-plan.json` is changed.
+Until the first verified publication, the existing root `index.html` and
+`board.js` remain the current site. Merging this PR therefore preserves the
+legacy view; no empty placeholder manifest is committed. The legacy site was
+already public and may contain outdated training and personal information; it
+is not evidence of the current PostgreSQL plan. The new adaptive artifact is
+allowlisted and has the privacy gate.
 
-The workflow waits until the GitHub Pages URL serves the exact approved version
-and canonical manifest hash. It then sends a signed result to TriCoach. If the
-new page cannot be verified, the workflow reverts the publication commit,
-checks the previous public version, and reports failure; it never reports
-success merely because a repository-dispatch was accepted.
+The first authenticated sync can start at any positive version already
+approved in PostgreSQL. The public archive contains that exact version and a
+separate baseline snapshot; it does not invent unavailable historical version
+files. Later publications must be consecutive. Replays with changed content,
+version gaps and stale signatures fail validation.
 
-## Required repository settings
+After a publication failure, the workflow restores the previous repository
+pointer, builds a rollback artifact (legacy site on the first sync, otherwise
+the previous approved manifest), deploys it explicitly and verifies the
+public response. Failed versions remain archived. If restoration cannot be
+verified, the callback reports `rollback_not_verified`; no success is claimed.
 
-Configure these Actions secrets in `ardenisov-code/ftp340-training`:
+## Settings for deployment
 
-- `TRICOACH_DISPATCH_HMAC_SECRET`: same random value as
-  `FTP340_DISPATCH_HMAC_SECRET` in TriCoach Render; at least 32 bytes.
-- `LINK_SIGNING_SECRET`: same value as TriCoach Render.
+After review and explicit production authorization, configure Pages to use
+**GitHub Actions** instead of its current branch source. The `github-pages`
+environment must allow `main` and GitHub Actions must be allowed the workflow's
+requested `contents: write`, `pages: write` and `id-token: write` permissions.
+Configure these repository Actions secrets:
+
+- `TRICOACH_DISPATCH_HMAC_SECRET`: same >=32-byte random value as TriCoach's
+  `FTP340_DISPATCH_HMAC_SECRET`.
+- `LINK_SIGNING_SECRET`: same callback signing secret as TriCoach Render.
 - `TRICOACH_CALLBACK_URL`: base URL of the TriCoach Render service.
 
-Allow GitHub Actions to write repository contents. GitHub Pages must publish
-from `main`; a workflow commit triggers the Pages build. The workflow uses its
-own repository-scoped `GITHUB_TOKEN` and does not need a second PAT.
-
-`adaptive-plan.json` begins in `awaiting_approved_sync` state. The initial
-approved database version is published through TriCoach's manual sync workflow
-after its DRY_RUN is reviewed. Until that verified sync, the page deliberately
-shows no stale workouts.
+Do not enable an initial sync until the actual approved plan and version have
+been reviewed read-only in PostgreSQL. Dry-run preview is not a migration.
 
 ## Local checks
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q scripts tests
+node --check site-template/board.js
 ```

@@ -9,6 +9,7 @@ import hmac
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -45,16 +46,20 @@ def main() -> int:
         f"{base_url}/internal/plan-publish-result", data=body, method="POST",
         headers={"Content-Type": "application/json", "X-TriCoach-Signature": signature},
     )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.loads(response.read(64_000))
-            if response.status != 200 or result.get("ok") is not True:
-                raise RuntimeError("callback_not_confirmed")
-    except (OSError, urllib.error.URLError, ValueError, RuntimeError) as exc:
-        print(f"TriCoach callback failed: {type(exc).__name__}", file=sys.stderr)
-        return 1
-    print(f"PASS: TriCoach recorded {args.status} for version {args.version}")
-    return 0
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                result = json.loads(response.read(64_000))
+                if response.status != 200 or result.get("ok") is not True:
+                    raise RuntimeError("callback_not_confirmed")
+            print(f"PASS: TriCoach recorded {args.status} for version {args.version}")
+            return 0
+        except (OSError, urllib.error.URLError, ValueError, RuntimeError) as exc:
+            if attempt == 2:
+                print(f"TriCoach callback failed: {type(exc).__name__}", file=sys.stderr)
+                return 1
+            time.sleep(5)
+    return 1
 
 
 if __name__ == "__main__":
