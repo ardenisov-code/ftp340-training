@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+
+<html lang="ru"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/><title>FTP 340 · Программа Артёма Денисова</title><style>
+:root{--bg:#0f1115;--card:#171a21;--card2:#1d212a;--fg:#e8eaf0;--mut:#9aa3b2;--acc:#ff6a3d;--acc2:#3dd6ff;--ok:#41d18b;--warn:#ffc04d;--bad:#ff5a6a;--line:#2a2f3a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 18px 80px}
+h1{font-size:34px;margin:0 0 6px;letter-spacing:-.5px}h1 span{color:var(--acc)}
+h2{font-size:24px;margin:42px 0 14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+h3{font-size:18px;margin:22px 0 8px;color:var(--acc2)}
+.sub{color:var(--mut)}
+nav{position:sticky;top:0;background:rgba(15,17,21,.95);backdrop-filter:blur(6px);padding:10px 0;z-index:5;border-bottom:1px solid var(--line);margin-bottom:10px}
+nav a{color:var(--mut);text-decoration:none;margin-right:14px;font-size:13px;white-space:nowrap}nav a:hover{color:var(--fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}.kpi b{display:block;font-size:26px;color:var(--acc)}.kpi span{color:var(--mut);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+.card ul{margin:6px 0 0;padding-left:20px}.card li{margin:4px 0}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:600;background:var(--card2)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.3px}
+.load{background:#3a2418;color:#ffb38f}.dl{background:#1a3326;color:#8ff0bd}.test{background:#3a1830;color:#ff9fd8}.camp{background:#2d2a14;color:#ffe08f}.taper{background:#16283a;color:#9fd2ff}
+.k-key{background:var(--acc);color:#111}.k-long{background:#ffb84d;color:#111}.k-z2{background:#2f6d4f;color:#dfffe9}.k-str{background:#5a4bd1;color:#fff}.k-rest{background:#333a47;color:#cfd6e3}.k-rec{background:#2b4a5e;color:#d6f1ff}.k-test{background:#e04aa5;color:#fff}
+.block{background:linear-gradient(135deg,#1b1f29,#151821);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:12px;padding:16px 18px;margin:28px 0 10px}
+.block h3{margin-top:0;color:var(--fg);font-size:20px}
+.block dl{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;margin:8px 0 0}.block dt{color:var(--mut)}.block dd{margin:0}
+details.week{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:10px 0}
+details.week>summary{cursor:pointer;padding:12px 16px;list-style:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+details.week>summary::-webkit-details-marker{display:none}
+details.week>summary .wn{font-weight:800;font-size:16px;min-width:74px}.wd{color:var(--mut);font-size:13px;min-width:120px}.wf{flex:1;min-width:240px}.wh{color:var(--mut);font-size:13px}
+.day{border-top:1px solid var(--line);padding:12px 16px;display:grid;grid-template-columns:92px 1fr;gap:12px}
+.day .dl2{font-weight:700}.day .dl2 small{display:block;color:var(--mut);font-weight:400}
+.day h4{margin:0 0 4px;font-size:15px}.goal{color:var(--mut);font-size:13.5px;margin:2px 0 6px}
+.day ol{margin:4px 0 6px;padding-left:20px}.day li{margin:3px 0}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--mut)}.meta b{color:var(--fg);font-weight:600}
+.notes{font-size:13px;color:#ffd9a8;margin-top:6px}.notes div{margin:2px 0}
+.pw{color:var(--acc);font-weight:700}.pct{color:var(--mut);font-size:12px}
+.ftpin input{width:70px;background:var(--card2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:14px}
+.btn{background:var(--card2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;margin-right:6px}
+.warn{border-left:4px solid var(--warn)}.bad{border-left:4px solid var(--bad)}.ok{border-left:4px solid var(--ok)}
+@media print{nav,.btn{display:none}body{background:#fff;color:#000}.card,.block,details.week{border-color:#ccc;background:#fff}details.week{break-inside:avoid}}
+@media(max-width:640px){.day{grid-template-columns:1fr}.block dl{grid-template-columns:1fr}}
+</style><link href="board.css?v=20261104-night" rel="stylesheet"/><script defer="" src="board.js?v=20261107-approved-plan-v2"></script></head><body><div class="wrap"><h1>Программа <span>FTP 340</span></h1><div class="sub">Утверждённая программа шоссейной подготовки · FTP 340 Вт к 6 июня 2027 года</div><nav><a href="#analysis">Разбор</a><a href="#principles">Принципы</a><a href="#ftp">FTP и калькулятор</a><a href="#monitor">Контроль</a><a href="#tests">Тесты</a><a href="#strength">Силовая</a><a href="#food">Питание</a><a href="#macro">Макроплан</a><a href="#plan">Подневный план</a></nav><h2 id="analysis">1. Тренерский разбор</h2><div class="card"><p>Тренировочная программа показывается по версиям, подтверждённым спортсменом в TriCoach. Цель 340 Вт и целевая дата фиксированы.</p><p>Публичная страница отображает только календарь и показатели, включённые в утверждённую программу.</p></div><h2 id="principles">2. Как устроена программа</h2><div class="card"><p>План строится из последовательности микроциклов и мезоциклов. Ключевые сессии сочетаются с аэробной работой, силовой подготовкой и восстановлением.</p><p>Нагрузка увеличивается только при наличии достаточных данных и прохождении детерминированных safety gates. Отсутствующие данные не являются основанием для прогрессии.</p></div><h2 id="ftp">3. FTP и калькулятор мощности</h2><div class="card ftp-calculator" id="ftp-calculator"><p>Справочный калькулятор. Изменение здесь сохраняется только в этом браузере и не меняет программу в TriCoach.</p><label class="ftp-current">FTP для расчёта <input id="ftp-reference" max="600" min="100" step="1" type="number"/> Вт</label><button class="btn" id="ftp-reset" type="button">Сбросить</button><table class="ztab"><thead><tr><th>Зона</th><th>% FTP</th><th>Мощность</th><th>Ощущение</th></tr></thead><tbody></tbody></table></div><h2 id="monitor">4. Контроль</h2><div class="card"><p>Персональные Garmin-показатели, медицинские ограничения и данные восстановления остаются в TriCoach и не публикуются на этой странице.</p></div><h2 id="tests">5. Тесты</h2><div class="card"><p>Тесты FTP и их даты берутся из утверждённого календаря. Выполняй указанный протокол в сопоставимых условиях.</p><p>Результат теста оценивается тренером перед изменением рабочего FTP.</p></div><h2 id="strength">6. Силовая подготовка</h2><div class="card"><p>Силовые сессии следуют периодизации программы и публикуются только после подтверждения версии.</p><p>Используй заданные в плане подходы, повторения и интенсивность; не добавляй работу самостоятельно.</p></div><h2 id="food">7. Питание и восстановление</h2><div class="card"><p>План питания и восстановления — общая часть подготовки. Персональные медицинские рекомендации и данные спортсмена на публичной странице не размещаются.</p></div><h2 id="macro">8. Макроциклы программы</h2><div class="card" id="macro-summary"><p>Структура блоков будет загружена из утверждённой версии программы.</p></div><h2 id="plan">9. Утверждённый календарь</h2><section aria-live="polite" id="approved-plan-calendar"><div class="card plan-loading">Загружаю утверждённую версию программы…</div></section></div></body></html>
