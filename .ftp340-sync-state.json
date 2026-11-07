@@ -1,1 +1,1 @@
-{"accepted_events":[],"current_version":0,"manifest_sha256":null,"proposal_id":null,"version_id":0}
+{"accepted_events":[{"manifest_sha256":"a8e4eefa49da2b38cf1b69237b7cde5949926e685994ccb2d8046e84b3b14985","nonce":"cd88b8d8df41ba432ed645efb13fbf8a","version_number":1}],"current_version":1,"manifest_sha256":"a8e4eefa49da2b38cf1b69237b7cde5949926e685994ccb2d8046e84b3b14985","proposal_id":0,"version_id":1}
