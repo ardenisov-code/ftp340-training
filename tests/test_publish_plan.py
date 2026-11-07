@@ -203,5 +203,25 @@ class ApprovedPlanPublicationTests(unittest.TestCase):
                 stage_event(ev, data, digest, repo)
 
 
+    def test_resolve_callback_url_prevents_duplicate_path(self):
+        from scripts.send_publish_result import resolve_callback_url
+        self.assertEqual(
+            resolve_callback_url("https://tricoach-garmin.onrender.com"),
+            "https://tricoach-garmin.onrender.com/internal/plan-publish-result",
+        )
+        self.assertEqual(
+            resolve_callback_url("https://tricoach-garmin.onrender.com/"),
+            "https://tricoach-garmin.onrender.com/internal/plan-publish-result",
+        )
+        self.assertEqual(
+            resolve_callback_url("https://tricoach-garmin.onrender.com/internal/plan-publish-result"),
+            "https://tricoach-garmin.onrender.com/internal/plan-publish-result",
+        )
+        self.assertEqual(
+            resolve_callback_url("https://tricoach-garmin.onrender.com/internal/plan-publish-result/"),
+            "https://tricoach-garmin.onrender.com/internal/plan-publish-result",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

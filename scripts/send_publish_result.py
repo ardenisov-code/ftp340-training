@@ -18,6 +18,13 @@ def canonical_json(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
+def resolve_callback_url(raw_url: str) -> str:
+    cleaned = raw_url.strip().rstrip("/")
+    if cleaned.endswith("/internal/plan-publish-result"):
+        return cleaned
+    return f"{cleaned}/internal/plan-publish-result"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--status", choices=["published", "failed"], required=True)
@@ -28,11 +35,12 @@ def main() -> int:
     parser.add_argument("--manifest-sha256", default="")
     parser.add_argument("--error-code", default="")
     args = parser.parse_args()
-    base_url = os.environ.get("TRICOACH_CALLBACK_URL", "").rstrip("/")
+    raw_url = os.environ.get("TRICOACH_CALLBACK_URL", "").strip()
     secret = os.environ.get("LINK_SIGNING_SECRET", "")
-    if not base_url or not secret:
+    if not raw_url or not secret:
         print("TriCoach callback configuration is missing", file=sys.stderr)
         return 2
+    callback_url = resolve_callback_url(raw_url)
     payload = {
         "proposal_id": args.proposal_id, "version_number": args.version,
         "version_id": args.version_id,
@@ -43,7 +51,7 @@ def main() -> int:
     body = canonical_json(payload)
     signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     request = urllib.request.Request(
-        f"{base_url}/internal/plan-publish-result", data=body, method="POST",
+        callback_url, data=body, method="POST",
         headers={"Content-Type": "application/json", "X-TriCoach-Signature": signature},
     )
     for attempt in range(3):
