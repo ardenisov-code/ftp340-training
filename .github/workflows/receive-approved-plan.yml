@@ -1,0 +1,116 @@
+name: Publish TriCoach-approved plan
+
+on:
+  repository_dispatch:
+    types: [tricoach_plan_approved]
+
+concurrency:
+  group: ftp340-approved-plan-publication
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Authenticate the TriCoach event
+        id: auth
+        env:
+          TRICOACH_DISPATCH_HMAC_SECRET: ${{ secrets.TRICOACH_DISPATCH_HMAC_SECRET }}
+        run: python scripts/publish_plan.py authorize --event-file "$GITHUB_EVENT_PATH"
+
+      - name: Validate approved manifest and stage the public version
+        id: prepare
+        env:
+          TRICOACH_DISPATCH_HMAC_SECRET: ${{ secrets.TRICOACH_DISPATCH_HMAC_SECRET }}
+        run: python scripts/publish_plan.py prepare --event-file "$GITHUB_EVENT_PATH" --repo .
+
+      - name: Commit the immutable version and current public view
+        id: commit
+        if: steps.prepare.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add adaptive-plan.json .ftp340-sync-state.json versions/
+          if git diff --cached --quiet; then
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "Publish TriCoach-approved FTP340 plan v${{ steps.prepare.outputs.version_number }}"
+          git push origin HEAD:main
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the published Pages JSON
+        id: verify
+        if: steps.commit.outcome == 'success'
+        run: >-
+          python scripts/verify_publication.py
+          --url "https://ardenisov-code.github.io/ftp340-training/adaptive-plan.json?run=${GITHUB_RUN_ID}"
+          --version "${{ steps.prepare.outputs.version_number }}"
+          --sha256 "${{ steps.prepare.outputs.manifest_sha256 }}"
+          --attempts 18 --delay 5
+
+      - name: Revert the public version if Pages verification fails
+        id: rollback
+        if: steps.commit.outputs.pushed == 'true' && steps.verify.outcome != 'success'
+        run: |
+          # Restore only the current pointer and replay state. Keep the
+          # immutable attempted version in versions/ for audit and retry.
+          git show "${{ steps.commit.outputs.commit_sha }}^:adaptive-plan.json" > adaptive-plan.json
+          git show "${{ steps.commit.outputs.commit_sha }}^:.ftp340-sync-state.json" > .ftp340-sync-state.json
+          git add adaptive-plan.json .ftp340-sync-state.json
+          git commit -m "Restore previous public FTP340 plan after failed verification"
+          git push origin HEAD:main
+          echo "rollback_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the previous public version was restored
+        id: verify_rollback
+        if: steps.rollback.outcome == 'success' && steps.prepare.outputs.previous_sha256 != ''
+        run: >-
+          python scripts/verify_publication.py
+          --url "https://ardenisov-code.github.io/ftp340-training/adaptive-plan.json?rollback=${GITHUB_RUN_ID}"
+          --version "${{ steps.prepare.outputs.previous_version }}"
+          --sha256 "${{ steps.prepare.outputs.previous_sha256 }}"
+          --attempts 18 --delay 5
+
+      - name: Report the final result to TriCoach
+        if: always() && steps.auth.outcome == 'success'
+        env:
+          LINK_SIGNING_SECRET: ${{ secrets.LINK_SIGNING_SECRET }}
+          TRICOACH_CALLBACK_URL: ${{ secrets.TRICOACH_CALLBACK_URL }}
+          COMMIT_SHA: ${{ steps.commit.outputs.commit_sha }}
+        run: |
+          if [[ "${{ steps.verify.outcome }}" == "success" ]]; then
+            python scripts/send_publish_result.py \
+              --status published \
+              --proposal-id "${{ steps.auth.outputs.proposal_id }}" \
+              --version "${{ steps.auth.outputs.version_number }}" \
+              --version-id "${{ steps.auth.outputs.version_id }}" \
+              --commit-sha "$COMMIT_SHA" \
+              --manifest-sha256 "${{ steps.prepare.outputs.manifest_sha256 }}"
+          else
+            python scripts/send_publish_result.py \
+              --status failed \
+              --proposal-id "${{ steps.auth.outputs.proposal_id }}" \
+              --version "${{ steps.auth.outputs.version_number }}" \
+              --version-id "${{ steps.auth.outputs.version_id }}" \
+              --commit-sha "${{ steps.rollback.outputs.rollback_sha }}" \
+              --manifest-sha256 "${{ steps.prepare.outputs.manifest_sha256 }}" \
+              --error-code "publication_or_pages_verification_failed"
+          fi

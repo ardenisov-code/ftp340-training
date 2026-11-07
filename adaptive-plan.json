@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "status": "awaiting_approved_sync",
+  "version_number": 0,
+  "version_id": 0,
+  "baseline_sha256": "",
+  "updated_at": null,
+  "target": {
+    "ftp_watts": 340,
+    "date": "2027-06-06",
+    "discipline": "road_cycling",
+    "race_distance_km": [15, 100]
+  },
+  "current_ftp": {
+    "confirmed_watts": null,
+    "confirmed_test_date": null,
+    "reported_watts": null,
+    "status": "not_synced"
+  },
+  "changes": [],
+  "weeks": [],
+  "completed_session_dates": [],
+  "privacy": {
+    "garmin_metrics_included": false,
+    "health_metrics_included": false,
+    "activity_performance_details_included": false
+  }
+}
