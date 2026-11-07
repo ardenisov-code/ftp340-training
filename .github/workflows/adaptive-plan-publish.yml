@@ -1,0 +1,90 @@
+name: Publish approved FTP340 plan
+
+on:
+  repository_dispatch:
+    types: [tricoach_plan_approved]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ftp340-adaptive-plan-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      LINK_SIGNING_SECRET: ${{ secrets.LINK_SIGNING_SECRET }}
+      TRICOACH_CALLBACK_URL: ${{ secrets.TRICOACH_CALLBACK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.FTP340_GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Decode and validate approved manifest
+        id: prepare
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: >-
+          python scripts/publish_adaptive_plan.py "$GITHUB_EVENT_PATH"
+          adaptive-plan.json /tmp/adaptive-plan-candidate.json
+
+      - name: Commit approved plan to the Pages source branch
+        id: commit
+        if: steps.prepare.outputs.already_current != 'true'
+        env:
+          VERSION_NUMBER: ${{ steps.prepare.outputs.version_number }}
+        run: |
+          set -euo pipefail
+          cp /tmp/adaptive-plan-candidate.json adaptive-plan.json
+          git config user.name "TriCoach Plan Publisher"
+          git config user.email "tricoach-plan-publisher@users.noreply.github.com"
+          git add adaptive-plan.json
+          if git diff --cached --quiet; then
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Publish athlete-approved FTP340 plan v${VERSION_NUMBER}"
+            git push origin HEAD:main
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the published Pages manifest
+        id: verify
+        env:
+          VERSION_NUMBER: ${{ steps.prepare.outputs.version_number }}
+          BASELINE_SHA256: ${{ steps.prepare.outputs.baseline_sha256 }}
+        run: python scripts/verify_pages.py "$VERSION_NUMBER" "$BASELINE_SHA256"
+
+      - name: Restore the previous Pages manifest if publication verification fails
+        if: steps.verify.outcome == 'failure' && steps.commit.outputs.committed == 'true'
+        run: |
+          set -euo pipefail
+          git show HEAD^:adaptive-plan.json > /tmp/adaptive-plan-previous.json
+          cp /tmp/adaptive-plan-previous.json adaptive-plan.json
+          git config user.name "TriCoach Plan Publisher"
+          git config user.email "tricoach-plan-publisher@users.noreply.github.com"
+          git add adaptive-plan.json
+          git commit -m "Restore previous FTP340 plan after failed publication"
+          git push origin HEAD:main
+          previous_version=$(python -c 'import json; print(json.load(open("adaptive-plan.json"))["version_number"])')
+          previous_baseline=$(python -c 'import json; print(json.load(open("adaptive-plan.json"))["baseline_sha256"])')
+          python scripts/verify_pages.py "$previous_version" "$previous_baseline" --timeout 180
+
+      - name: Report publication result to TriCoach
+        if: always()
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+          RESULT_STATUS: ${{ steps.verify.outcome == 'success' && 'published' || 'failed' }}
+          RESULT_COMMIT: ${{ steps.commit.outputs.sha || github.sha }}
+          RESULT_ERROR: ${{ steps.prepare.outcome == 'failure' && 'validation_failed' || steps.commit.outcome == 'failure' && 'git_push_failed' || steps.verify.outcome == 'failure' && 'pages_verification_failed' || '' }}
+        run: >-
+          python scripts/report_publish_result.py "$EVENT_PATH" "$RESULT_STATUS"
+          --commit-sha "$RESULT_COMMIT" --error-code "$RESULT_ERROR"
