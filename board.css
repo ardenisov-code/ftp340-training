@@ -139,6 +139,52 @@ body {
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .data-note { margin: 16px 0 0; color: var(--dim); font-size: 13px; }
 
+/* Mission Control Status Bar */
+.mission-status-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; background: var(--card2); border: 1px solid var(--line); color: var(--mut); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-pill.ok { border-color: rgba(65, 209, 139, 0.3); color: var(--fg); }
+.status-pill.ok .status-dot { background: #41d18b; box-shadow: 0 0 6px #41d18b; }
+.status-pill.ok .status-val { color: #41d18b; }
+.status-pill.stale { border-color: rgba(255, 192, 77, 0.3); color: var(--fg); }
+.status-pill.stale .status-dot { background: #ffc04d; box-shadow: 0 0 6px #ffc04d; }
+.status-pill.stale .status-val { color: #ffc04d; }
+.status-pill.failed { border-color: rgba(255, 90, 106, 0.3); color: var(--fg); }
+.status-pill.failed .status-dot { background: #ff5a6a; box-shadow: 0 0 6px #ff5a6a; }
+.status-pill.failed .status-val { color: #ff5a6a; }
+.status-pill.unknown { border-color: var(--line); color: var(--mut); }
+.status-pill.unknown .status-dot { background: var(--mut); }
+.status-pill.unknown .status-val { color: var(--mut); }
+
+/* Active Plan Banner & Notice */
+.active-plan-banner { margin: 12px 0 16px; padding: 14px 18px; border-radius: 14px; background: linear-gradient(135deg, rgba(30, 43, 44, 0.8), rgba(24, 39, 46, 0.9)); border: 1px solid rgba(125, 170, 181, 0.3); }
+.banner-pill { font-weight: 800; font-size: 14px; color: var(--acc2); }
+.banner-sub { margin: 4px 0 0; font-size: 13px; color: var(--mut); }
+.plan-version-notice { font-size: 13px; color: var(--acc2); margin-top: 4px; font-weight: 600; }
+
+/* Safety Indicators */
+.safety-indicator-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.safe-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; background: rgba(65, 209, 139, 0.15); color: #8ff0bd; border: 1px solid rgba(65, 209, 139, 0.3); }
+.safe-badge.pending { background: rgba(255, 192, 77, 0.15); color: #ffe08f; border-color: rgba(255, 192, 77, 0.3); }
+
+/* Teleport & Digital Twin layout */
+.teleport-actions-row, .teleport-btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.dt-uncalibrated-notice { padding: 14px; border-radius: 10px; background: var(--card2); border: 1px dashed var(--line); color: var(--mut); line-height: 1.6; }
+.dt-uncalibrated-notice b { color: var(--fg); }
+.mmp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 10px; }
+.mmp-item { padding: 10px; border-radius: 10px; background: var(--card2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.mmp-dur { font-size: 11px; color: var(--mut); text-transform: uppercase; }
+.mmp-w { font-size: 16px; font-weight: 800; color: var(--fg); }
+.mmp-wkg { font-size: 12px; color: var(--mut); }
+.pmc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 10px 0; }
+.pmc-stat { padding: 12px; border-radius: 10px; background: var(--card2); border: 1px solid var(--line); }
+.pmc-stat span { display: block; font-size: 12px; color: var(--mut); }
+.pmc-stat b { font-size: 18px; display: block; margin-top: 4px; }
+.caveats-box { margin-top: 12px; font-size: 13px; color: var(--mut); }
+.caveats-box ul { margin: 6px 0 0; padding-left: 20px; }
+.lock-pill { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: rgba(125, 170, 181, 0.15); color: var(--acc2); }
+.telemetry-badge-ok { padding: 8px 12px; border-radius: 8px; background: rgba(65, 209, 139, 0.15); color: #8ff0bd; font-weight: 600; margin-bottom: 8px; }
+
 .card, .block, details.week { background-color: var(--panel); border-color: var(--line); }
 h2, h3 { color: var(--ink); }
 .tag, .pill { border-color: var(--line); }

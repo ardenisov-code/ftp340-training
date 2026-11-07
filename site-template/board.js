@@ -73,60 +73,212 @@
     URL.revokeObjectURL(url);
   };
 
-  const generateZwoXml = (session, ftp = 280) => {
+  const fmt = num => Number(num.toFixed(3)).toString();
+
+  const generateZwoXml = (session, ftp = 290) => {
+    if (!session || session.discipline !== 'bike') {
+      throw new Error('Экспорт доступен только для велотренировок');
+    }
     const title = (session.title || 'Workout').slice(0, 80).replace(/[<>&"]/g, '');
     const desc = `${session.title || ''}\n${session.goal || ''}\n${session.main_set || ''}`.slice(0, 1000).replace(/[<>&"]/g, '');
     const durMin = Number(session.duration_min || 60);
     const totalSec = durMin * 60;
-    const main = session.main_set || '';
+    const main = (session.main_set || '').trim();
+    const fullText = `${session.title || ''} ${main} ${session.goal || ''}`;
 
     let xml = `<workout_file>\n    <author>TriCoach FTP-340</author>\n    <name>${title}</name>\n    <description>${desc}</description>\n    <sportType>bike</sportType>\n    <workout>\n`;
 
-    const m3015 = main.match(/(\d+)\s*[×xх]\s*(\d+)\s*[×xх]\s*\(?30\s*с/i) || main.match(/(\d+)\s*сери\w*\s*по\s*(\d+)/i);
-    if (m3015 || title.includes('30/15')) {
-      const sets = m3015 ? parseInt(m3015[1], 10) : 3;
-      const reps = m3015 ? parseInt(m3015[2], 10) : 10;
+    // Case 1: Micro-intervals (30/15, 40/20, etc.)
+    const mSeries = main.match(/(\d+)\s*сери[а-яё\w]*\s*по\s*(\d+)\s*[×xх*]?\s*\(?(\d{2})\s*с/iu);
+    const mDirect = main.match(/(\d+)\s*[×xх*]\s*(\d+)\s*[×xх*]\s*\(?(\d{2})\s*с/iu);
+    const mSlash = main.match(/(?:^|\s)(\d{2})\s*\/\s*(\d{2})(?:\s|$)/u);
+
+    if (mSeries || mDirect || mSlash || /30\/15|40\/20/i.test(fullText)) {
+      let sets = 3, reps = 10, onDur = 30, offDur = 15;
+      if (mSeries) {
+        sets = parseInt(mSeries[1], 10);
+        reps = parseInt(mSeries[2], 10);
+        onDur = parseInt(mSeries[3], 10);
+        offDur = onDur === 40 ? 20 : 15;
+      } else if (mDirect) {
+        sets = parseInt(mDirect[1], 10);
+        reps = parseInt(mDirect[2], 10);
+        onDur = parseInt(mDirect[3], 10);
+        offDur = onDur === 40 ? 20 : 15;
+      } else if (mSlash) {
+        onDur = parseInt(mSlash[1], 10);
+        offDur = parseInt(mSlash[2], 10);
+      }
+
+      let onPower = 1.21;
+      const mPwr = main.match(/(?:30|40)\s*с\s*@\s*(\d+)(?:[–-](\d+))?\s*%/i) || main.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
+      if (mPwr) {
+        const lo = parseFloat(mPwr[1]) / 100;
+        const hi = mPwr[2] ? parseFloat(mPwr[2]) / 100 : lo;
+        onPower = (lo + hi) / 2;
+      }
+
+      let setRestSec = 180;
+      const mRest = main.match(/между\s+сериями\s+(\d+)\s*['′]/i);
+      if (mRest) setRestSec = parseInt(mRest[1], 10) * 60;
+
       xml += `        <Warmup Duration="600" PowerLow="0.50" PowerHigh="0.70" Cadence="90"/>\n`;
+      let used = 600;
       for (let s = 0; s < sets; s++) {
-        xml += `        <IntervalsT Repeat="${reps}" OnDuration="30" OffDuration="15" OnPower="1.21" OffPower="0.50" Cadence="100" CadenceResting="85"/>\n`;
+        xml += `        <IntervalsT Repeat="${reps}" OnDuration="${onDur}" OffDuration="${offDur}" OnPower="${fmt(onPower)}" OffPower="0.50" Cadence="100" CadenceResting="85"/>\n`;
+        used += reps * (onDur + offDur);
         if (s < sets - 1) {
-          xml += `        <SteadyState Duration="180" Power="0.50" Cadence="85"/>\n`;
+          xml += `        <SteadyState Duration="${setRestSec}" Power="0.50" Cadence="85"/>\n`;
+          used += setRestSec;
         }
       }
-      const used = 600 + (sets * reps * 45) + ((sets - 1) * 180);
       const cool = Math.max(totalSec - used, 300);
       xml += `        <Cooldown Duration="${cool}" PowerLow="0.55" PowerHigh="0.40" Cadence="85"/>\n`;
-    } else if (/(\d+)\s*[×xх]\s*(\d{1,2})\s*['′]/.test(main)) {
-      const m = main.match(/(\d+)\s*[×xх]\s*(\d{1,2})\s*['′]/);
-      const reps = parseInt(m[1], 10);
-      const repMin = parseInt(m[2], 10);
+      xml += `    </workout>\n</workout_file>`;
+      return xml;
+    }
+
+    // Case 2: Long Z2 endurance with embedded tempo blocks
+    const mEmbedded = main.match(/(?:в\s+середине|включая)?\s*(\d+)\s*[×xх]\s*(\d{1,2})\s*['′](.*)/i);
+    const isEnduranceRide = /(?:весь\s+объ[её]м|аэробн|длительн|базов)/i.test(fullText) || /Z2/i.test(fullText);
+
+    if (mEmbedded && isEnduranceRide) {
+      const reps = parseInt(mEmbedded[1], 10);
+      const repMin = parseInt(mEmbedded[2], 10);
       const repSec = repMin * 60;
-      xml += `        <Warmup Duration="900" PowerLow="0.50" PowerHigh="0.75" Cadence="90"/>\n`;
-      xml += `        <IntervalsT Repeat="${reps}" OnDuration="${repSec}" OffDuration="120" OnPower="0.88" OffPower="0.50" Cadence="90" CadenceResting="85"/>\n`;
-      const used = 900 + (reps * (repSec + 120));
+      const subClause = mEmbedded[3] || '';
+
+      let tempoPower = 0.825;
+      const mTempoPwr = subClause.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
+      if (mTempoPwr) {
+        const lo = parseFloat(mTempoPwr[1]) / 100;
+        const hi = mTempoPwr[2] ? parseFloat(mTempoPwr[2]) / 100 : lo;
+        tempoPower = (lo + hi) / 2;
+      }
+
+      let tempoRestSec = 300;
+      const mTempoRest = subClause.match(/через\s+(\d+)\s*['′]/);
+      if (mTempoRest) tempoRestSec = parseInt(mTempoRest[1], 10) * 60;
+
+      let baseZ2Power = 0.67;
+      const mBasePwr = main.match(/объ[её]м\s*@\s*(\d+)(?:[–-](\d+))?\s*%/i);
+      if (mBasePwr) {
+        const lo = parseFloat(mBasePwr[1]) / 100;
+        const hi = mBasePwr[2] ? parseFloat(mBasePwr[2]) / 100 : lo;
+        baseZ2Power = (lo + hi) / 2;
+      }
+
+      const warm = 600;
+      const cool = 300;
+      const tempoTotalSec = reps * repSec + (reps - 1) * tempoRestSec;
+      const remainingBaseSec = Math.max(totalSec - warm - cool - tempoTotalSec, 600);
+      const preTempoSec = Math.max(Math.floor(remainingBaseSec / 2), 600);
+      const postTempoSec = Math.max(remainingBaseSec - preTempoSec, 300);
+
+      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="${fmt(baseZ2Power)}" Cadence="90"/>\n`;
+      xml += `        <SteadyState Duration="${preTempoSec}" Power="${fmt(baseZ2Power)}" Cadence="90"/>\n`;
+      xml += `        <IntervalsT Repeat="${reps}" OnDuration="${repSec}" OffDuration="${tempoRestSec}" OnPower="${fmt(tempoPower)}" OffPower="0.60" Cadence="90" CadenceResting="85"/>\n`;
+      if (postTempoSec > 0) {
+        xml += `        <SteadyState Duration="${postTempoSec}" Power="${fmt(baseZ2Power)}" Cadence="90"/>\n`;
+      }
+      xml += `        <Cooldown Duration="${cool}" PowerLow="0.55" PowerHigh="0.40" Cadence="85"/>\n`;
+      xml += `    </workout>\n</workout_file>`;
+      return xml;
+    }
+
+    // Case 3: N×M' intervals (subthreshold, threshold, VO2max)
+    const mNxM = main.match(/(\d+)\s*[×xх]\s*(\d{1,2})\s*['′](.*)/i);
+    if (mNxM) {
+      const reps = parseInt(mNxM[1], 10);
+      const repMin = parseInt(mNxM[2], 10);
+      const repSec = repMin * 60;
+      const tail = mNxM[3] || '';
+
+      let targetPower = 0.88;
+      const mPwr = tail.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/) || main.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
+      if (mPwr) {
+        const lo = parseFloat(mPwr[1]) / 100;
+        const hi = mPwr[2] ? parseFloat(mPwr[2]) / 100 : lo;
+        targetPower = (lo + hi) / 2;
+      } else {
+        if (repMin >= 7) targetPower = 0.865;
+        else if (repMin <= 5) targetPower = 1.08;
+        else targetPower = 1.00;
+      }
+
+      let offSec = 120;
+      const mRest = tail.match(/через\s+(\d+)\s*['′]/) || main.match(/отдых\s+(\d+)\s*['′]/i);
+      if (mRest) {
+        offSec = parseInt(mRest[1], 10) * 60;
+      } else if (repMin <= 5) {
+        offSec = 180;
+      }
+
+      const warm = 900;
+      const cad = targetPower >= 1.05 ? 95 : 90;
+      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="0.75" Cadence="90"/>\n`;
+      xml += `        <IntervalsT Repeat="${reps}" OnDuration="${repSec}" OffDuration="${offSec}" OnPower="${fmt(targetPower)}" OffPower="0.50" Cadence="${cad}" CadenceResting="85"/>\n`;
+      const used = warm + (reps * (repSec + offSec));
       const cool = Math.max(totalSec - used, 300);
       xml += `        <Cooldown Duration="${cool}" PowerLow="0.55" PowerHigh="0.40" Cadence="85"/>\n`;
-    } else {
+      xml += `    </workout>\n</workout_file>`;
+      return xml;
+    }
+
+    // Case 3.5: All-Out Tests (5-min or 20-min test)
+    if (/ТЕСТ/iu.test(title) || /ТЕСТ/iu.test(main)) {
+      const is20m = /20\s*(?:минут|мин|['′])/iu.test(title) || /20\s*(?:минут|мин|['′])/iu.test(main);
+      const testSec = is20m ? 1200 : 300;
+      const testPower = is20m ? 1.00 : 1.15;
+      const warm = 1200;
+      const used = warm + testSec;
+      const cool = Math.max(totalSec - used, 600);
+      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="0.80" Cadence="90"/>\n`;
+      xml += `        <SteadyState Duration="${testSec}" Power="${fmt(testPower)}" Cadence="95"/>\n`;
+      xml += `        <Cooldown Duration="${cool}" PowerLow="0.50" PowerHigh="0.40" Cadence="85"/>\n`;
+      xml += `    </workout>\n</workout_file>`;
+      return xml;
+    }
+
+    // Case 4: Pure Z2 / Endurance steady ride
+    const isPureZ2 = /Z2|аэробн|вынослив|восстановлен|Z1/i.test(fullText);
+    const hasWattTarget = /@\s*(\d+)(?:[–-](\d+))?\s*%/.test(main) || /@\s*\d+\s*Вт/.test(main);
+    if (isPureZ2 && (hasWattTarget || durMin >= 45)) {
+      let pwr = 0.65;
+      const mPwr = main.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
+      if (mPwr) {
+        const lo = parseFloat(mPwr[1]) / 100;
+        const hi = mPwr[2] ? parseFloat(mPwr[2]) / 100 : lo;
+        pwr = (lo + hi) / 2;
+      }
       const warm = 600;
       const cool = 300;
       const steady = Math.max(totalSec - warm - cool, 600);
-      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="0.65" Cadence="90"/>\n`;
-      xml += `        <SteadyState Duration="${steady}" Power="0.68" Cadence="90"/>\n`;
-      xml += `        <Cooldown Duration="${cool}" PowerLow="0.60" PowerHigh="0.45" Cadence="85"/>\n`;
+      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="${fmt(pwr)}" Cadence="90"/>\n`;
+      xml += `        <SteadyState Duration="${steady}" Power="${fmt(pwr)}" Cadence="90"/>\n`;
+      xml += `        <Cooldown Duration="${cool}" PowerLow="${fmt(pwr)}" PowerHigh="0.45" Cadence="85"/>\n`;
+      xml += `    </workout>\n</workout_file>`;
+      return xml;
     }
 
-    xml += `    </workout>\n</workout_file>`;
-    return xml;
+    throw new Error(`Структура тренировки неоднозначна или не содержит интервалов мощности: '${main.slice(0, 60)}'`);
   };
 
-  const exportZwoFile = (session, ftp = 280) => {
-    const xml = generateZwoXml(session, ftp);
-    const slug = (session.title || 'Workout').replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, '_').slice(0, 20);
-    downloadBlob(`TriCoach_${session.date}_${slug}.zwo`, xml, 'application/octet-stream');
+  const exportZwoFile = (session, ftp = 290) => {
+    try {
+      const xml = generateZwoXml(session, ftp);
+      const slug = (session.title || 'Workout').replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, '_').slice(0, 20);
+      downloadBlob(`TriCoach_${session.date}_${slug}.zwo`, xml, 'application/octet-stream');
+    } catch (err) {
+      alert(`Ошибка экспорта ZWO: ${err.message}`);
+    }
   };
 
-  const exportFitFile = (session, ftp = 280) => {
-    // Direct download from TriCoach backend endpoint
+  const exportFitFile = (session, ftp = 290) => {
+    if (session.discipline !== 'bike') {
+      alert('Ошибка экспорта FIT: Экспорт доступен только для велотренировок');
+      return;
+    }
     const url = `https://tricoach-garmin.onrender.com/api/workouts/${session.date}.fit?ftp=${ftp}`;
     const a = document.createElement('a');
     a.href = url;
@@ -260,12 +412,12 @@
         const zwoBtn = make('button', 'btn btn-teleport-zwo', '🚴 ZWO');
         zwoBtn.type = 'button';
         zwoBtn.title = 'Скачать .ZWO для MyWhoosh и Zwift';
-        zwoBtn.onclick = () => exportZwoFile(session, ftp || 280);
+        zwoBtn.onclick = () => exportZwoFile(session, ftp || 290);
 
         const fitBtn = make('button', 'btn btn-teleport-fit', '⌚ FIT');
         fitBtn.type = 'button';
         fitBtn.title = 'Скачать .FIT для Garmin';
-        fitBtn.onclick = () => exportFitFile(session, ftp || 280);
+        fitBtn.onclick = () => exportFitFile(session, ftp || 290);
 
         btnRow.append(zwoBtn, fitBtn);
         content.append(btnRow);
@@ -355,30 +507,78 @@
 
   // ── Mission Control Section 1: СЕГОДНЯ ───────────────────────────────────────
 
+  const updateLiveSystemStatus = async container => {
+    try {
+      const res = await fetch('https://tricoach-garmin.onrender.com/api/mission-control/status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('status_unavailable');
+      const data = await res.json();
+      container.replaceChildren();
+      const serviceDefs = [
+        { key: 'garmin', name: 'Garmin Connect' },
+        { key: 'openai', name: 'OpenAI GPT-6' },
+        { key: 'render_api', name: 'Render API' },
+        { key: 'telegram', name: '@Ardenisov_bot' },
+        { key: 'pages', name: 'GitHub Pages' },
+        { key: 'database', name: 'PostgreSQL' },
+      ];
+      serviceDefs.forEach(s => {
+        const info = data.services?.[s.key] || { status: 'UNKNOWN', detail: '' };
+        const rawStatus = String(info.status || 'UNKNOWN').toUpperCase();
+        let cls = 'unknown';
+        if (rawStatus === 'OK') cls = 'ok';
+        else if (rawStatus === 'STALE') cls = 'stale';
+        else if (rawStatus === 'FAILED') cls = 'failed';
+
+        const pill = make('div', `status-pill ${cls}`);
+        pill.title = info.detail || '';
+        pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${s.name}:</span> <b class="status-val">${rawStatus}</b>`;
+        container.append(pill);
+      });
+
+      const gateBadge = document.getElementById('safety-gate-status-badge');
+      if (gateBadge && data.safety_gates) {
+        const rawGate = String(data.safety_gates.status || 'PENDING').toUpperCase();
+        const gateCls = rawGate === 'PASS' ? 'safe-badge' : 'safe-badge pending';
+        gateBadge.className = gateCls;
+        gateBadge.textContent = `⏳ Safety-гейты: ${rawGate} (${data.safety_gates.detail || ''})`;
+      }
+    } catch (_err) {
+      container.replaceChildren();
+      ['Garmin Connect', 'OpenAI GPT-6', 'Render API', '@Ardenisov_bot', 'GitHub Pages', 'PostgreSQL'].forEach(name => {
+        const pill = make('div', 'status-pill failed');
+        pill.title = 'Бэкенд недоступен или сетевая ошибка';
+        pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${name}:</span> <b class="status-val">FAILED</b>`;
+        container.append(pill);
+      });
+    }
+  };
+
   const renderDashboard = manifest => {
     const dashboard = document.querySelector('[data-pane="now"]');
     if (!dashboard) return;
     dashboard.replaceChildren();
 
-    // 1. Technical System Status Bar
+    // 1. Technical System Status Bar (Live health checks)
     const statusBar = make('div', 'mission-status-bar');
-    const services = [
-      { id: 'garmin', name: 'Garmin Connect', status: 'Sync OK' },
-      { id: 'openai', name: 'OpenAI GPT-6', status: 'Operational' },
-      { id: 'render', name: 'Render API', status: 'Live' },
-      { id: 'telegram', name: '@Ardenisov_bot', status: 'Active' },
-      { id: 'pages', name: 'GitHub Pages', status: 'Live' },
-      { id: 'postgres', name: 'PostgreSQL', status: 'Connected' },
-    ];
-    services.forEach(s => {
-      const pill = make('div', 'status-pill ok');
-      pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${s.name}:</span> <b class="status-val">${s.status}</b>`;
+    ['Garmin Connect', 'OpenAI GPT-6', 'Render API', '@Ardenisov_bot', 'GitHub Pages', 'PostgreSQL'].forEach(name => {
+      const pill = make('div', 'status-pill unknown');
+      pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${name}:</span> <b class="status-val">SYNC...</b>`;
       statusBar.append(pill);
     });
     dashboard.append(statusBar);
+    updateLiveSystemStatus(statusBar);
+
+    // 1b. Active plan version notice
+    const planBanner = make('div', 'active-plan-banner');
+    planBanner.innerHTML = `
+      <div class="banner-pill">📋 Действующая программа: Версия 1 (Базовый утверждённый календарь)</div>
+      <p class="banner-sub">Обновление программы ожидает утверждения спортсмена в Telegram (@Ardenisov_bot).</p>
+    `;
+    dashboard.append(planBanner);
 
     const target = manifest.target || {ftp_watts: 340, date: '2027-06-06'};
-    const ftp = manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts || 280;
+    const workingFtp = 290;
+    const gap = target.ftp_watts - workingFtp;
     const today = localMoscowDate();
     const allDays = (manifest.weeks || []).flatMap(week => week.days || []);
     const todaySession = allDays.find(day => day.date === today);
@@ -391,7 +591,7 @@
     left.append(
       make('p', 'eyebrow', 'MISSION CONTROL · ВЕЛОМОЩЬ 2.0'),
       make('h1', '', 'Фокус дня'),
-      make('p', 'hero-copy', `Стратегическая цель: FTP ${target.ftp_watts} Вт к ${target.date}. Разрыв: ${target.ftp_watts - ftp} Вт.`),
+      make('p', 'hero-copy', `Стратегическая цель: FTP ${target.ftp_watts} Вт к ${target.date}. Разрыв: ${gap} Вт. Рабочий FTP: ${workingFtp} Вт.`),
     );
 
     const card = make('article', 'next-card today-focus-card');
@@ -401,7 +601,7 @@
       card.append(make('div', 'watts', formatDuration(session.duration_min)));
       card.append(make('p', 'session-meta-line', `${formatDate(session.date)} · ${session.goal || ''}`));
       if (session.main_set) {
-        card.append(make('p', 'session-set-preview', sessionWattText(session.main_set, Number(ftp || 0))));
+        card.append(make('p', 'session-set-preview', sessionWattText(session.main_set, workingFtp)));
       }
 
       // Teleport 1-click action buttons
@@ -409,11 +609,11 @@
         const actionRow = make('div', 'teleport-actions-row');
         const zwoBtn = make('button', 'btn btn-action-zwo', '🚴 Скачать ZWO');
         zwoBtn.type = 'button';
-        zwoBtn.onclick = () => exportZwoFile(session, ftp);
+        zwoBtn.onclick = () => exportZwoFile(session, workingFtp);
 
         const fitBtn = make('button', 'btn btn-action-fit', '⌚ Скачать FIT');
         fitBtn.type = 'button';
-        fitBtn.onclick = () => exportFitFile(session, ftp);
+        fitBtn.onclick = () => exportFitFile(session, workingFtp);
 
         const helpBtn = make('button', 'btn btn-action-help', 'ℹ️ Инструкция MyWhoosh');
         helpBtn.type = 'button';
@@ -428,24 +628,24 @@
     }
     hero.append(left, card);
 
-    // 3. Quick KPI Metrics
+    // 3. Quick KPI Metrics (Unified athlete profile)
     const metrics = make('div', 'metrics');
     metrics.append(
-      make('article', 'metric', `FTP ${ftp || '—'} Вт`),
-      make('article', 'metric', `Разрыв ${target.ftp_watts - ftp} Вт`),
-      make('article', 'metric', `Версия ${manifest.version_number || '1'}`),
-      make('article', 'metric', `Финиш ${target.ftp_watts} Вт · ${target.date}`),
+      make('article', 'metric', `FTP ${workingFtp} Вт (заявлен)`),
+      make('article', 'metric', `Разрыв ${gap} Вт (к ${target.date})`),
+      make('article', 'metric', `Целевой вес 80 кг (4.25 Вт/кг)`),
+      make('article', 'metric', `Версия ${manifest.version_number || '1'} (утверждена)`),
     );
 
     // 4. Daily Readiness & Safety Insight Card
     const insightCard = make('article', 'card readiness-insight-card');
     insightCard.innerHTML = `
       <h3>⚡ Готовность и статус восстановления</h3>
-      <p><b>Режим микроцикла:</b> Текущий блок направлен на стабильное накопление адаптации без форсирования интенсивности. Осевая нагрузка на позвоночник строго регламентирована (RPE ≤ 7).</p>
+      <p><b>Режим микроцикла:</b> Текущий блок направлен на стабильное накопление адаптации без форсирования интенсивности. Осевая нагрузка строго регламентирована (RPE ≤ 7).</p>
       <div class="safety-indicator-row">
         <span class="safe-badge">✓ Защита опорно-двигательного аппарата: АКТИВНА</span>
         <span class="safe-badge">✓ Человеческий контроль: ВКЛЮЧЁН</span>
-        <span class="safe-badge">✓ Safety-гейты: 100% PASS</span>
+        <span class="safe-badge pending" id="safety-gate-status-badge">⏳ Safety-гейты: PENDING (Версия 1 верифицирована · обновление ожидает утверждения)</span>
       </div>
     `;
 
@@ -456,117 +656,100 @@
 
   const renderDigitalTwinPane = (pane, manifest) => {
     pane.replaceChildren();
-    const ftp = manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts || 280;
+    const workingFtp = 290;
+    const targetFtp = manifest.target?.ftp_watts || 340;
+    const gap = targetFtp - workingFtp;
     const isConfirmed = Boolean(manifest.current_ftp?.confirmed_watts);
 
     const header = make('div', 'dt-header');
     header.append(
       make('h2', '', 'DIGITAL TWIN · Персональная модель FTP 340'),
-      make('p', 'sub', 'Объяснимая научная траектория развития мощности к 6 июня 2027 года с доверительным интервалом.'),
+      make('p', 'sub', 'Объяснимая научная траектория развития мощности к 6 июня 2027 года на основе доказательной физиологии.'),
     );
 
-    // KPI Cards
+    // KPI Cards - No fictitious sports data
     const kpiGrid = make('div', 'metrics dt-kpis');
     kpiGrid.append(
       (() => {
         const c = make('article', 'metric');
-        c.innerHTML = `<span>Текущий FTP</span><b>${ftp} Вт</b><small>${isConfirmed ? 'Подтверждён тестом' : 'Заявлен (не подтверждён)'}</small>`;
+        c.innerHTML = `<span>Текущий рабочий FTP</span><b>${workingFtp} Вт</b><small>${isConfirmed ? 'Подтверждён тестом' : 'Заявлен спортсменом (не подтверждён тестом)'}</small>`;
         return c;
       })(),
       (() => {
         const c = make('article', 'metric');
-        c.innerHTML = `<span>Цель к 06.06.2027</span><b class="lime">340 Вт</b><small>Разрыв: ${340 - ftp} Вт</small>`;
+        c.innerHTML = `<span>Цель к 06.06.2027</span><b class="lime">${targetFtp} Вт</b><small>Разрыв: ${gap} Вт · Вес: 80 кг (4.25 Вт/кг)</small>`;
         return c;
       })(),
       (() => {
         const c = make('article', 'metric');
-        c.innerHTML = `<span>Critical Power (CP)</span><b class="cyan">270 Вт</b><small>W′: 24.0 кДж</small>`;
+        c.innerHTML = `<span>Critical Power (CP)</span><b class="cyan" style="font-size:16px;">Недостаточно данных</b><small>Требуется тест 5' + 20' для калибровки CP и W′</small>`;
         return c;
       })(),
       (() => {
         const c = make('article', 'metric');
-        c.innerHTML = `<span>Durability (>1200 кДж)</span><b>91.5%</b><small>Сохранение мощности</small>`;
+        c.innerHTML = `<span>Durability (>1200 кДж)</span><b style="font-size:16px;">Недостаточно данных</b><small>Требуются длительные тренировки с мощемером</small>`;
         return c;
       })(),
     );
 
-    // Interactive Trajectory SVG Chart
+    // Honest Trajectory Notice Card - No fictitious trajectory or CI corridor
     const trajectoryCard = make('article', 'card dt-chart-card');
     trajectoryCard.innerHTML = `
-      <h3>📈 Прогноз траектории FTP к 06.06.2027 (3 Сценария)</h3>
-      <p class="sub">Модель периодизации с 4-недельными мезоциклами (3 недели нагрузки + 1 неделя разгрузки) и коридором неопределенности ±18 Вт.</p>
-      <div class="chart-container">
-        <svg viewBox="0 0 700 240" class="dt-svg-chart" preserveAspectRatio="none">
-          <!-- Uncertainty Band -->
-          <polygon points="40,165 240,135 480,95 660,40 660,110 480,150 240,175 40,185" fill="rgba(16, 185, 129, 0.12)" />
-          <!-- Baseline Scenario (Reaches 340W) -->
-          <path d="M 40,175 Q 300,140 660,65" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" />
-          <!-- Conservative Scenario (Reaches ~310W) -->
-          <path d="M 40,175 Q 320,165 660,130" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-dasharray="6,4" />
-          <!-- Optimistic Scenario (Reaches 340W earlier) -->
-          <path d="M 40,175 Q 260,90 660,45" fill="none" stroke="#38BDF8" stroke-width="2.2" stroke-dasharray="4,4" />
-          <!-- Points -->
-          <circle cx="40" cy="175" r="5" fill="#10B981" />
-          <text x="45" y="195" fill="#9aa3b2" font-size="11">Ноя 2026 (280W)</text>
-          <circle cx="660" cy="65" r="6" fill="#10B981" />
-          <text x="590" y="55" fill="#10B981" font-weight="bold" font-size="12">340 Вт · 06.06.2027</text>
-        </svg>
-      </div>
-      <div class="chart-legend">
-        <span><i style="background:#10B981"></i> Базовый (+1.9 Вт/нед · 340 Вт)</span>
-        <span><i style="background:#F59E0B"></i> Консервативный (+0.9 Вт/нед · ~310 Вт)</span>
-        <span><i style="background:#38BDF8"></i> Оптимистичный (+2.4 Вт/нед)</span>
-        <span style="color:rgba(16,185,129,0.9);">■ Коридор 90% CI (±18 Вт)</span>
+      <h3>📈 Модель траектории FTP к 06.06.2027</h3>
+      <div class="dt-uncalibrated-notice">
+        <p><b>Статус калибровки:</b> Недостаточно данных для построения математического коридора.</p>
+        <p>Текущий рабочий FTP <b>${workingFtp} Вт</b> зафиксирован со слов спортсмена и пока не верифицирован контрольным тестом. Целевой ориентир — <b>${targetFtp} Вт к 06.06.2027</b> (+${gap} Вт за ~30 недель, средний темп ~1.7 Вт/неделя).</p>
+        <p class="data-note">Доверительный коридор (90% CI) и сценарии прогрессии (консервативный / базовый / оптимистичный) будут рассчитаны математически только после контрольного протокола P5 + P20. Фиктивные кривые прогресса исключены из интерфейса.</p>
       </div>
     `;
 
-    // Power-Duration Curve (MMP)
+    // Power-Duration Curve (MMP) - No fictitious numbers
     const mmpCard = make('article', 'card dt-mmp-card');
     mmpCard.innerHTML = `
       <h3>⚡ Профиль мощности (Power-Duration Curve)</h3>
+      <p class="sub" style="margin-bottom:12px;">Недостаточно данных (требуется калибровка тестами и синхронизация Garmin мощности)</p>
       <div class="mmp-grid">
-        <div class="mmp-item"><span class="mmp-dur">5с (Спринт)</span><b class="mmp-w">910 Вт</b><span class="mmp-wkg">12.1 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">15с</span><b class="mmp-w">770 Вт</b><span class="mmp-wkg">10.3 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">1 мин</span><b class="mmp-w">518 Вт</b><span class="mmp-wkg">6.9 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">3 мин (VO2)</span><b class="mmp-w">392 Вт</b><span class="mmp-wkg">5.2 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">5 мин (P5)</span><b class="mmp-w">350 Вт</b><span class="mmp-wkg">4.7 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">10 мин</span><b class="mmp-w">302 Вт</b><span class="mmp-wkg">4.0 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">20 мин (P20)</span><b class="mmp-w">291 Вт</b><span class="mmp-wkg">3.9 Вт/кг</span></div>
-        <div class="mmp-item"><span class="mmp-dur">60 мин (FTP)</span><b class="mmp-w">272 Вт</b><span class="mmp-wkg">3.6 Вт/кг</span></div>
+        <div class="mmp-item"><span class="mmp-dur">5с (Спринт)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">15с</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">1 мин</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">3 мин (VO2)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">5 мин (P5)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">10 мин</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">20 мин (P20)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">60 мин (FTP)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">${workingFtp} Вт (заявлен)</b><span class="mmp-wkg">${(workingFtp / 80).toFixed(2)} Вт/кг</span></div>
       </div>
     `;
 
-    // PMC Form Management (CTL / ATL / TSB)
+    // PMC Form Management (CTL / ATL / TSB) - Honest uncalibrated state
     const pmcCard = make('article', 'card dt-pmc-card');
     pmcCard.innerHTML = `
       <h3>📊 Управление формой (Performance Management Chart)</h3>
       <div class="pmc-stats">
-        <div class="pmc-stat"><span>ATL (усталость, 7д)</span><b>8.3</b></div>
-        <div class="pmc-stat"><span>CTL (форма, 42д)</span><b>1.7</b></div>
-        <div class="pmc-stat"><span>TSB (свежесть)</span><b class="bad">-6.6</b></div>
+        <div class="pmc-stat"><span>ATL (усталость, 7д)</span><b style="color:var(--dim);">Недостаточно данных</b></div>
+        <div class="pmc-stat"><span>CTL (форма, 42д)</span><b style="color:var(--dim);">Недостаточно данных</b></div>
+        <div class="pmc-stat"><span>TSB (баланс формы)</span><b style="color:var(--dim);">Недостаточно данных</b></div>
       </div>
       <div class="caveats-box">
-        <b>⚠️ Ограничения модели:</b>
+        <b>⚠️ Статус калибровки:</b>
         <ul>
-          <li>Модель Банистера-Коггана не учитывает сон, вариабельность пульса и чувствительность опорно-двигательной зоны.</li>
-          <li>В начале тренировочного года малый исторический интервал занижает базовый CTL.</li>
-          <li>Для подтверждения адаптации требуются контрольные тесты.</li>
+          <li>Требуется накопление истории тренировочных файлов (.FIT) с измерителем мощности для расчёта импульса ТСС.</li>
+          <li>Модель Банистера-Коггана активируется автоматически после накопления 14+ дней подтверждённых файлов мощности.</li>
         </ul>
       </div>
     `;
 
-    // Upcoming Tests to Narrow Uncertainty
+    // Upcoming Tests
     const testsCard = make('article', 'card dt-tests-card');
     testsCard.innerHTML = `
       <h3>🎯 Контрольные тесты для сужения неопределённости</h3>
       <ul class="test-milestones-list">
-        <li><b>20.11.2026:</b> ТЕСТ 5' максимум (P5) — калибрует VO2 peak и сокращает неопределенность модели на 25%.</li>
-        <li><b>22.11.2026:</b> ТЕСТ 20' максимум (P20) — подтверждает рабочий FTP и рассчитывает CP/W' (-35% неопределенности).</li>
-        <li><b>27.12.2026:</b> Контрольный срез 1-го блока — подтверждение темпа адаптации (+1.9 Вт/нед).</li>
+        <li><b>20.11.2026:</b> ТЕСТ 5' максимум (P5) — калибрует VO2 peak и профиль мощности.</li>
+        <li><b>22.11.2026:</b> ТЕСТ 20' максимум (P20) — подтверждает рабочий FTP и рассчитывает CP/W′.</li>
+        <li><b>27.12.2026:</b> Контрольный срез 1-го блока — подтверждение темпа адаптации.</li>
       </ul>
     `;
 
-    // Privacy-Protected Telemetry Box
+    // Privacy-Protected Telemetry Box - Secure Authorization (No query token)
     const privacyBox = make('article', 'card telemetry-privacy-box');
     privacyBox.innerHTML = `
       <div class="privacy-header">
@@ -582,17 +765,28 @@
 
     pane.append(header, kpiGrid, trajectoryCard, mmpCard, pmcCard, testsCard, privacyBox);
 
-    // Event listener for unlock
+    // Event listener for unlock - Bearer token, rate limit handling, input wipe
     const unlockBtn = privacyBox.querySelector('#btn-telemetry-unlock');
     const pinInput = privacyBox.querySelector('#telemetry-pin-input');
     const display = privacyBox.querySelector('#telemetry-secure-display');
     if (unlockBtn && pinInput && display) {
       unlockBtn.addEventListener('click', async () => {
         const pin = pinInput.value.trim();
+        pinInput.value = '';
         if (!pin) return;
         unlockBtn.textContent = 'Проверяю…';
         try {
-          const res = await fetch(`https://tricoach-garmin.onrender.com/api/mission-control/telemetry?token=${encodeURIComponent(pin)}`);
+          const res = await fetch('https://tricoach-garmin.onrender.com/api/mission-control/telemetry', {
+            headers: {
+              'Authorization': `Bearer ${pin}`,
+            },
+          });
+          if (res.status === 429) {
+            display.style.display = 'block';
+            display.innerHTML = `<span style="color:var(--bad);">✕ Слишком много неверных попыток. Доступ временно заблокирован на 15 минут (защита от перебора).</span>`;
+            unlockBtn.textContent = 'Заблокировано';
+            return;
+          }
           if (!res.ok) throw new Error('unauthorized');
           const data = await res.json();
           display.style.display = 'block';
