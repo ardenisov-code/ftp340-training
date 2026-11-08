@@ -235,7 +235,16 @@ def validate_transition(current: dict[str, Any], incoming: dict[str, Any]) -> No
     previous_ftp = current.get("current_ftp") or {}
     next_ftp = incoming.get("current_ftp") or {}
     if previous_ftp.get("reported_watts") != next_ftp.get("reported_watts"):
-        raise PublishValidationError("reported_ftp_changed_without_test")
+        # Athlete-reported working FTP may be corrected without pretending it
+        # was laboratory-confirmed. Keep confirmation state separate and only
+        # allow the reported field to change while the incoming status says so.
+        if next_ftp.get("status") != "athlete_reported":
+            raise PublishValidationError("reported_ftp_change_must_remain_athlete_reported")
+        try:
+            if int(next_ftp.get("reported_watts")) <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise PublishValidationError("reported_ftp_must_be_positive") from None
     previous_confirmed = previous_ftp.get("confirmed_watts")
     next_confirmed = next_ftp.get("confirmed_watts")
     if previous_confirmed != next_confirmed:

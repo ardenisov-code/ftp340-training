@@ -15,6 +15,7 @@ from scripts.publish_plan import (
     event_signature,
     restore_previous_manifest,
     stage_event,
+    validate_transition,
 )
 from scripts.build_pages import build
 
@@ -86,6 +87,32 @@ def event_for(value, *, nonce=None):
 
 
 class ApprovedPlanPublicationTests(unittest.TestCase):
+    def test_reported_ftp_can_be_corrected_without_claiming_confirmation(self):
+        current = manifest(2)
+        incoming = manifest(3, version_id=30)
+        incoming["current_ftp"]["reported_watts"] = 290
+        validate_transition(current, incoming)
+
+        invalid_status = copy.deepcopy(incoming)
+        invalid_status["current_ftp"]["status"] = "confirmed"
+        with self.assertRaisesRegex(PublishValidationError, "reported_ftp_change_must_remain_athlete_reported"):
+            validate_transition(current, invalid_status)
+
+        invalid_value = copy.deepcopy(incoming)
+        invalid_value["current_ftp"]["reported_watts"] = 0
+        with self.assertRaisesRegex(PublishValidationError, "reported_ftp_must_be_positive"):
+            validate_transition(current, invalid_value)
+
+    def test_confirmed_ftp_change_still_requires_matching_test(self):
+        current = manifest(2)
+        incoming = manifest(3, version_id=30)
+        incoming["current_ftp"]["confirmed_watts"] = 290
+        incoming["current_ftp"]["status"] = "confirmed"
+        with self.assertRaisesRegex(PublishValidationError, "ftp_change_without_confirmed_test"):
+            validate_transition(current, incoming)
+        incoming["confirmed_ftp_tests"] = [{"test_date": "2026-11-08", "ftp_watts": 290}]
+        validate_transition(current, incoming)
+
     def test_artifact_and_legacy_rollback_keep_correct_site(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as folder:
