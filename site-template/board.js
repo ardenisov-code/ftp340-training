@@ -59,7 +59,7 @@
     rest: ['k-rest', 'ОТДЫХ'], recovery: ['k-rec', 'ВОССТ.'],
   }[discipline] || ['k-rec', 'ТРЕНИРОВКА']);
 
-  // ── Workout Teleport: Client-Side ZWO & FIT Exporter ─────────────────────────
+  // ── Workout Teleport: Canonical Server-Side ZWO & FIT Exporter ───────────────
 
   const downloadBlob = (filename, content, mime) => {
     const blob = new Blob([content], { type: mime });
@@ -73,202 +73,18 @@
     URL.revokeObjectURL(url);
   };
 
-  const fmt = num => Number(num.toFixed(3)).toString();
-
-  const generateZwoXml = (session, ftp = 290) => {
-    if (!session || session.discipline !== 'bike') {
-      throw new Error('Экспорт доступен только для велотренировок');
-    }
-    const title = (session.title || 'Workout').slice(0, 80).replace(/[<>&"]/g, '');
-    const desc = `${session.title || ''}\n${session.goal || ''}\n${session.main_set || ''}`.slice(0, 1000).replace(/[<>&"]/g, '');
-    const durMin = Number(session.duration_min || 60);
-    const totalSec = durMin * 60;
-    const main = (session.main_set || '').trim();
-    const fullText = `${session.title || ''} ${main} ${session.goal || ''}`;
-
-    let xml = `<workout_file>\n    <author>TriCoach FTP-340</author>\n    <name>${title}</name>\n    <description>${desc}</description>\n    <sportType>bike</sportType>\n    <workout>\n`;
-
-    // Case 1: Micro-intervals (30/15, 40/20, etc.)
-    const mSeries = main.match(/(\d+)\s*сери[а-яё\w]*\s*по\s*(\d+)\s*[×xх*]?\s*\(?(\d{2})\s*с/iu);
-    const mDirect = main.match(/(\d+)\s*[×xх*]\s*(\d+)\s*[×xх*]\s*\(?(\d{2})\s*с/iu);
-    const mSlash = main.match(/(?:^|\s)(\d{2})\s*\/\s*(\d{2})(?:\s|$)/u);
-
-    if (mSeries || mDirect || mSlash || /30\/15|40\/20/i.test(fullText)) {
-      let sets = 3, reps = 10, onDur = 30, offDur = 15;
-      if (mSeries) {
-        sets = parseInt(mSeries[1], 10);
-        reps = parseInt(mSeries[2], 10);
-        onDur = parseInt(mSeries[3], 10);
-        offDur = onDur === 40 ? 20 : 15;
-      } else if (mDirect) {
-        sets = parseInt(mDirect[1], 10);
-        reps = parseInt(mDirect[2], 10);
-        onDur = parseInt(mDirect[3], 10);
-        offDur = onDur === 40 ? 20 : 15;
-      } else if (mSlash) {
-        onDur = parseInt(mSlash[1], 10);
-        offDur = parseInt(mSlash[2], 10);
-      }
-
-      let onPower = 1.21;
-      const mPwr = main.match(/(?:30|40)\s*с\s*@\s*(\d+)(?:[–-](\d+))?\s*%/i) || main.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
-      if (mPwr) {
-        const lo = parseFloat(mPwr[1]) / 100;
-        const hi = mPwr[2] ? parseFloat(mPwr[2]) / 100 : lo;
-        onPower = (lo + hi) / 2;
-      }
-
-      let setRestSec = 180;
-      const mRest = main.match(/между\s+сериями\s+(\d+)\s*['′]/i);
-      if (mRest) setRestSec = parseInt(mRest[1], 10) * 60;
-
-      xml += `        <Warmup Duration="600" PowerLow="0.50" PowerHigh="0.70" Cadence="90"/>\n`;
-      let used = 600;
-      for (let s = 0; s < sets; s++) {
-        xml += `        <IntervalsT Repeat="${reps}" OnDuration="${onDur}" OffDuration="${offDur}" OnPower="${fmt(onPower)}" OffPower="0.50" Cadence="100" CadenceResting="85"/>\n`;
-        used += reps * (onDur + offDur);
-        if (s < sets - 1) {
-          xml += `        <SteadyState Duration="${setRestSec}" Power="0.50" Cadence="85"/>\n`;
-          used += setRestSec;
-        }
-      }
-      const cool = Math.max(totalSec - used, 300);
-      xml += `        <Cooldown Duration="${cool}" PowerLow="0.55" PowerHigh="0.40" Cadence="85"/>\n`;
-      xml += `    </workout>\n</workout_file>`;
-      return xml;
-    }
-
-    // Case 2: Long Z2 endurance with embedded tempo blocks
-    const mEmbedded = main.match(/(?:в\s+середине|включая)?\s*(\d+)\s*[×xх]\s*(\d{1,2})\s*['′](.*)/i);
-    const isEnduranceRide = /(?:весь\s+объ[её]м|аэробн|длительн|базов)/i.test(fullText) || /Z2/i.test(fullText);
-
-    if (mEmbedded && isEnduranceRide) {
-      const reps = parseInt(mEmbedded[1], 10);
-      const repMin = parseInt(mEmbedded[2], 10);
-      const repSec = repMin * 60;
-      const subClause = mEmbedded[3] || '';
-
-      let tempoPower = 0.825;
-      const mTempoPwr = subClause.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
-      if (mTempoPwr) {
-        const lo = parseFloat(mTempoPwr[1]) / 100;
-        const hi = mTempoPwr[2] ? parseFloat(mTempoPwr[2]) / 100 : lo;
-        tempoPower = (lo + hi) / 2;
-      }
-
-      let tempoRestSec = 300;
-      const mTempoRest = subClause.match(/через\s+(\d+)\s*['′]/);
-      if (mTempoRest) tempoRestSec = parseInt(mTempoRest[1], 10) * 60;
-
-      let baseZ2Power = 0.67;
-      const mBasePwr = main.match(/объ[её]м\s*@\s*(\d+)(?:[–-](\d+))?\s*%/i);
-      if (mBasePwr) {
-        const lo = parseFloat(mBasePwr[1]) / 100;
-        const hi = mBasePwr[2] ? parseFloat(mBasePwr[2]) / 100 : lo;
-        baseZ2Power = (lo + hi) / 2;
-      }
-
-      const warm = 600;
-      const cool = 300;
-      const tempoTotalSec = reps * repSec + (reps - 1) * tempoRestSec;
-      const remainingBaseSec = Math.max(totalSec - warm - cool - tempoTotalSec, 600);
-      const preTempoSec = Math.max(Math.floor(remainingBaseSec / 2), 600);
-      const postTempoSec = Math.max(remainingBaseSec - preTempoSec, 300);
-
-      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="${fmt(baseZ2Power)}" Cadence="90"/>\n`;
-      xml += `        <SteadyState Duration="${preTempoSec}" Power="${fmt(baseZ2Power)}" Cadence="90"/>\n`;
-      xml += `        <IntervalsT Repeat="${reps}" OnDuration="${repSec}" OffDuration="${tempoRestSec}" OnPower="${fmt(tempoPower)}" OffPower="0.60" Cadence="90" CadenceResting="85"/>\n`;
-      if (postTempoSec > 0) {
-        xml += `        <SteadyState Duration="${postTempoSec}" Power="${fmt(baseZ2Power)}" Cadence="90"/>\n`;
-      }
-      xml += `        <Cooldown Duration="${cool}" PowerLow="0.55" PowerHigh="0.40" Cadence="85"/>\n`;
-      xml += `    </workout>\n</workout_file>`;
-      return xml;
-    }
-
-    // Case 3: N×M' intervals (subthreshold, threshold, VO2max)
-    const mNxM = main.match(/(\d+)\s*[×xх]\s*(\d{1,2})\s*['′](.*)/i);
-    if (mNxM) {
-      const reps = parseInt(mNxM[1], 10);
-      const repMin = parseInt(mNxM[2], 10);
-      const repSec = repMin * 60;
-      const tail = mNxM[3] || '';
-
-      let targetPower = 0.88;
-      const mPwr = tail.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/) || main.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
-      if (mPwr) {
-        const lo = parseFloat(mPwr[1]) / 100;
-        const hi = mPwr[2] ? parseFloat(mPwr[2]) / 100 : lo;
-        targetPower = (lo + hi) / 2;
-      } else {
-        if (repMin >= 7) targetPower = 0.865;
-        else if (repMin <= 5) targetPower = 1.08;
-        else targetPower = 1.00;
-      }
-
-      let offSec = 120;
-      const mRest = tail.match(/через\s+(\d+)\s*['′]/) || main.match(/отдых\s+(\d+)\s*['′]/i);
-      if (mRest) {
-        offSec = parseInt(mRest[1], 10) * 60;
-      } else if (repMin <= 5) {
-        offSec = 180;
-      }
-
-      const warm = 900;
-      const cad = targetPower >= 1.05 ? 95 : 90;
-      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="0.75" Cadence="90"/>\n`;
-      xml += `        <IntervalsT Repeat="${reps}" OnDuration="${repSec}" OffDuration="${offSec}" OnPower="${fmt(targetPower)}" OffPower="0.50" Cadence="${cad}" CadenceResting="85"/>\n`;
-      const used = warm + (reps * (repSec + offSec));
-      const cool = Math.max(totalSec - used, 300);
-      xml += `        <Cooldown Duration="${cool}" PowerLow="0.55" PowerHigh="0.40" Cadence="85"/>\n`;
-      xml += `    </workout>\n</workout_file>`;
-      return xml;
-    }
-
-    // Case 3.5: All-Out Tests (5-min or 20-min test)
-    if (/ТЕСТ/iu.test(title) || /ТЕСТ/iu.test(main)) {
-      const is20m = /20\s*(?:минут|мин|['′])/iu.test(title) || /20\s*(?:минут|мин|['′])/iu.test(main);
-      const testSec = is20m ? 1200 : 300;
-      const testPower = is20m ? 1.00 : 1.15;
-      const warm = 1200;
-      const used = warm + testSec;
-      const cool = Math.max(totalSec - used, 600);
-      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="0.80" Cadence="90"/>\n`;
-      xml += `        <SteadyState Duration="${testSec}" Power="${fmt(testPower)}" Cadence="95"/>\n`;
-      xml += `        <Cooldown Duration="${cool}" PowerLow="0.50" PowerHigh="0.40" Cadence="85"/>\n`;
-      xml += `    </workout>\n</workout_file>`;
-      return xml;
-    }
-
-    // Case 4: Pure Z2 / Endurance steady ride
-    const isPureZ2 = /Z2|аэробн|вынослив|восстановлен|Z1/i.test(fullText);
-    const hasWattTarget = /@\s*(\d+)(?:[–-](\d+))?\s*%/.test(main) || /@\s*\d+\s*Вт/.test(main);
-    if (isPureZ2 && (hasWattTarget || durMin >= 45)) {
-      let pwr = 0.65;
-      const mPwr = main.match(/@\s*(\d+)(?:[–-](\d+))?\s*%/);
-      if (mPwr) {
-        const lo = parseFloat(mPwr[1]) / 100;
-        const hi = mPwr[2] ? parseFloat(mPwr[2]) / 100 : lo;
-        pwr = (lo + hi) / 2;
-      }
-      const warm = 600;
-      const cool = 300;
-      const steady = Math.max(totalSec - warm - cool, 600);
-      xml += `        <Warmup Duration="${warm}" PowerLow="0.50" PowerHigh="${fmt(pwr)}" Cadence="90"/>\n`;
-      xml += `        <SteadyState Duration="${steady}" Power="${fmt(pwr)}" Cadence="90"/>\n`;
-      xml += `        <Cooldown Duration="${cool}" PowerLow="${fmt(pwr)}" PowerHigh="0.45" Cadence="85"/>\n`;
-      xml += `    </workout>\n</workout_file>`;
-      return xml;
-    }
-
-    throw new Error(`Структура тренировки неоднозначна или не содержит интервалов мощности: '${main.slice(0, 60)}'`);
-  };
+  // ZWO is generated by the canonical server-side parser to preserve the approved session.
 
   const exportZwoFile = (session, ftp = 290) => {
     try {
-      const xml = generateZwoXml(session, ftp);
-      const slug = (session.title || 'Workout').replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, '_').slice(0, 20);
-      downloadBlob(`TriCoach_${session.date}_${slug}.zwo`, xml, 'application/octet-stream');
+      const url = `https://tricoach-garmin.onrender.com/api/workouts/${session.date}/zwo?ftp=${ftp}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (err) {
       alert(`Ошибка экспорта ZWO: ${err.message}`);
     }
@@ -307,14 +123,14 @@
     const body = make('div', 'mission-modal-body');
     body.innerHTML = `
       <ol class="modal-steps">
-        <li><b>Скачай файл тренировки:</b> Нажми кнопку <i>«🚴 Скачать ZWO»</i> на карточке дня.</li>
-        <li><b>Открой Workout Builder:</b> Перейди на официальный сайт <a href="https://workout.mywhoosh.com/" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:underline;">workout.mywhoosh.com</a>.</li>
+        <li><b>Скачай ZWO:</b> Нажми <i>«ZWO · MyWhoosh»</i> у нужной велотренировки. На телефоне файл будет в «Загрузках» (iPhone: приложение «Файлы» → Downloads; Android: «Файлы» → Downloads).</li>
+        <li><b>Открой Workout Builder:</b> В том же браузере перейди на официальный сайт <a href="https://workout.mywhoosh.com/" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:underline;">workout.mywhoosh.com</a>.</li>
         <li><b>Авторизуйся:</b> Войди под своим аккаунтом MyWhoosh.</li>
-        <li><b>Загрузи файл:</b> В верхнем меню нажми <b>Import</b> и укажи скачанный <code>.zwo</code> файл.</li>
-        <li><b>Отправь в игру:</b> Нажми <b>Export to MyWhoosh</b> — тренировка моментально появится в игре в разделе <i>Custom Workouts</i>!</li>
+        <li><b>Импортируй файл:</b> Нажми <b>Import</b> и выбери этот <code>.zwo</code> в папке Downloads. Повтори для каждого файла.</li>
+        <li><b>Отправь в аккаунт:</b> Нажми <b>Export to MyWhoosh</b>. Тренировка появится в приложении в разделе <i>My Workouts</i>.</li>
       </ol>
       <div class="modal-hint">
-        💡 <b>Для Zwift:</b> Просто скопируй скачанный <code>.zwo</code> файл в папку <code>Документы/Zwift/Workouts/&lt;UserId&gt;/</code> на компьютере.
+        📱 <b>Важно:</b> скачивание файла ещё не добавляет его в MyWhoosh — нужен шаг Import и Export to MyWhoosh на сайте. <br>💡 <b>Для Zwift:</b> скопируй скачанный <code>.zwo</code> в папку <code>Документы/Zwift/Workouts/&lt;UserId&gt;/</code> на компьютере.
       </div>
     `;
     card.append(header, body);
@@ -330,7 +146,7 @@
     const body = document.querySelector('.ztab tbody');
     if (!input || !body) return;
     const stored = Number(localStorage.getItem('ftp340_public_calc') || 0);
-    const source = Number(manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts || 0);
+    const source = Number(manifest.current_ftp?.confirmed_watts || 290);
     const initial = Number.isInteger(stored) && stored >= 100 && stored <= 600 ? stored : source;
     input.value = initial || '';
     input.placeholder = source ? String(source) : 'FTP';
@@ -402,8 +218,8 @@
       if (session.cadence) content.append(make('p', 'session-cadence', session.cadence));
       if (session.key_numbers) content.append(make('p', 'session-key-numbers', sessionWattText(session.key_numbers, ftp)));
       const referenceFtp = Number(session.source_reference_ftp_watts || 0);
-      if (referenceFtp && (!ftp || referenceFtp > ftp)) {
-        content.append(make('p', 'session-ftp-warning', `Расчёт исходного блока: проектный FTP ${referenceFtp} Вт. До подтверждения FTP не повышайте нагрузку по этому ориентиру.`));
+      if (referenceFtp && ftp && referenceFtp !== ftp) {
+        content.append(make('p', 'session-ftp-warning', `Исходные проценты этого блока рассчитаны при FTP ${referenceFtp} Вт; текущий рабочий FTP — ${ftp} Вт. Экспорт сохраняет явно заданные в плане ватты, а проценты без ватт считает от текущего FTP.`));
       }
 
       // Feature 01: Teleport export buttons for bike sessions
@@ -427,6 +243,48 @@
       details.append(day);
     });
     return details;
+  };
+
+  const renderNextBikeExports = (manifest, ftp) => {
+    const mount = document.getElementById('approved-plan-calendar');
+    const sessions = (manifest.weeks || []).flatMap(week => week.days || [])
+      .filter(session => session.discipline === 'bike' && session.date >= localMoscowDate() && !session.completed)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 3);
+    const panel = make('section', 'card next-bike-export-panel');
+    panel.append(
+      make('h3', '', '🚴 Ближайшие 3 велотренировки'),
+      make('p', 'next-bike-export-copy', 'Скачай ZWO для MyWhoosh или FIT для Garmin. В MyWhoosh файл нужно один раз импортировать через веб-конструктор.'),
+    );
+    if (!sessions.length) {
+      panel.append(make('p', 'next-bike-export-empty', 'В календаре нет будущих велотренировок для экспорта.'));
+    } else {
+      const list = make('div', 'next-bike-export-list');
+      sessions.forEach(session => {
+        const row = make('div', 'next-bike-export-row');
+        const details = make('div', 'next-bike-export-details');
+        details.append(
+          make('strong', '', `${formatDate(session.date)} · ${session.title || 'Велотренировка'}`),
+          make('span', '', `${formatDuration(session.duration_min)}${session.goal ? ` · ${session.goal}` : ''}`),
+        );
+        const actions = make('div', 'teleport-btn-row');
+        const zwo = make('button', 'btn btn-teleport-zwo', 'ZWO · MyWhoosh');
+        zwo.type = 'button';
+        zwo.onclick = () => exportZwoFile(session, ftp);
+        const fit = make('button', 'btn btn-teleport-fit', 'FIT · Garmin');
+        fit.type = 'button';
+        fit.onclick = () => exportFitFile(session, ftp);
+        actions.append(zwo, fit);
+        row.append(details, actions);
+        list.append(row);
+      });
+      panel.append(list);
+      const guide = make('button', 'btn btn-action-help', 'Как импортировать ZWO в MyWhoosh с телефона');
+      guide.type = 'button';
+      guide.onclick = showMyWhooshGuideModal;
+      panel.append(guide);
+    }
+    mount.append(panel);
   };
 
   const renderPlan = manifest => {
@@ -455,7 +313,8 @@
     collapseButton.dataset.action = 'collapse-weeks';
     tools.append(intro, select, openButton, todayButton, expandButton, collapseButton);
     mount.append(tools);
-    const ftp = Number(manifest.current_ftp?.confirmed_watts || manifest.current_ftp?.reported_watts || 0);
+    const ftp = Number(manifest.current_ftp?.confirmed_watts || 290);
+    renderNextBikeExports(manifest, ftp);
     manifest.weeks.forEach(week => {
       const details = renderWeek(week, ftp);
       const option = make('option', '', `Неделя ${week.week_number} · ${formatDate(details.dataset.s)}`);

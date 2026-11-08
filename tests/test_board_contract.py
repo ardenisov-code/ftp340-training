@@ -88,47 +88,28 @@ class PublicBoardContractTests(unittest.TestCase):
             self.assertIn("Обновление программы ожидает утверждения спортсмена", script)
             self.assertIn("safety-gate-status-badge", script)
 
-    def test_workout_teleport_js_generation_and_strict_validation(self):
-        import subprocess
-        node_bin = "/opt/homebrew/bin/node"
-        check_script = """
-        const fs = require('fs');
-        const code = fs.readFileSync('site-template/board.js', 'utf8');
-        const fnStr = code.slice(code.indexOf('const generateZwoXml ='), code.indexOf('const exportZwoFile ='));
-        const fmtStr = code.slice(code.indexOf('const fmt ='), code.indexOf('const generateZwoXml ='));
-        const fn = new Function('session', 'ftp', fmtStr + '\\n' + fnStr + '\\nreturn generateZwoXml(session, ftp);');
+    def test_workout_export_does_not_reimplement_plan_parser_in_browser(self):
+        script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
+        self.assertIn("/api/workouts/${session.date}/zwo?ftp=${ftp}", script)
+        self.assertIn("/api/workouts/${session.date}.fit?ftp=${ftp}", script)
+        self.assertNotIn("generateZwoXml", script)
 
-        // 1. 3x10x30/15
-        const z1 = fn({ discipline: 'bike', title: 'VO2', duration_min: 75, main_set: "3 серии по 10×(30 с @ 120–125% / 15 с @ 50%). Отдых между сериями 3' легко" }, 290);
-        if (!z1.includes('OnPower="1.225"') || !z1.includes('Repeat="10"')) throw new Error('Failed 30/15');
+    def test_live_zwo_export_uses_server_parser_and_290w_reported_ftp(self):
+        script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
+        self.assertIn("/api/workouts/${session.date}/zwo?ftp=${ftp}", script)
+        self.assertIn("const ftp = Number(manifest.current_ftp?.confirmed_watts || 290)", script)
+        self.assertNotIn("const xml = generateZwoXml(session, ftp)", script)
 
-        // 2. 4x8 subthreshold
-        const z2 = fn({ discipline: 'bike', title: 'Sub', duration_min: 80, main_set: "4×8' @ 85–88% через 2' легко" }, 290);
-        if (!z2.includes('OnPower="0.865"') || !z2.includes('Repeat="4"')) throw new Error('Failed 4x8');
-
-        // 3. 5x4 VO2max
-        const z3 = fn({ discipline: 'bike', title: 'VO2max', duration_min: 70, main_set: "5×4' @ 105–110% через 3' легко" }, 290);
-        if (!z3.includes('OnPower="1.075"') || !z3.includes('Repeat="5"') || !z3.includes('OffDuration="180"')) throw new Error('Failed 5x4');
-
-        // 4. Long Z2 with embedded tempo
-        const z4 = fn({ discipline: 'bike', title: 'Endurance', duration_min: 120, main_set: "Весь объём @ 62–72%. В середине 2×15' @ 80–85% через 5' легко" }, 290);
-        if (!z4.includes('OnPower="0.825"') || !z4.includes('Repeat="2"')) throw new Error('Failed embedded tempo');
-
-        // 5. Rejection of non-bike
-        let rejectedNonBike = false;
-        try { fn({ discipline: 'strength', title: 'Gym', main_set: 'Squats' }, 290); } catch (e) { rejectedNonBike = true; }
-        if (!rejectedNonBike) throw new Error('Non-bike not rejected');
-
-        // 6. Rejection of ambiguous
-        let rejectedAmbiguous = false;
-        try { fn({ discipline: 'bike', title: 'Random', main_set: 'Just pedal' }, 290); } catch (e) { rejectedAmbiguous = true; }
-        if (!rejectedAmbiguous) throw new Error('Ambiguous not rejected');
-
-        console.log('ALL_TELEPORT_JS_PASS');
-        """
-        proc = subprocess.run([node_bin, "-e", check_script], cwd=str(ROOT), capture_output=True, text=True)
-        self.assertEqual(proc.returncode, 0, f"Node script failed: {proc.stderr}")
-        self.assertIn("ALL_TELEPORT_JS_PASS", proc.stdout)
+    def test_board_surfaces_exports_for_next_three_uncompleted_bike_sessions(self):
+        script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
+        self.assertIn("const renderNextBikeExports = (manifest, ftp)", script)
+        self.assertIn("session.discipline === 'bike' && session.date >= localMoscowDate() && !session.completed", script)
+        self.assertIn(".slice(0, 3)", script)
+        self.assertIn("ZWO · MyWhoosh", script)
+        self.assertIn("FIT · Garmin", script)
+        self.assertIn("Как импортировать ZWO в MyWhoosh с телефона", script)
+        self.assertIn("Downloads", script)
+        self.assertIn("renderNextBikeExports(manifest, ftp)", script)
 
 
 if __name__ == "__main__":
