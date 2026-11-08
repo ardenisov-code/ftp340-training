@@ -412,6 +412,23 @@
     }
   };
 
+  const updateLivePlanBanner = async container => {
+    try {
+      const res = await fetch('https://tricoach-garmin.onrender.com/api/mission-control/status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('status_unavailable');
+      const data = await res.json();
+      const gates = data.safety_gates || {};
+      const version = gates.active_version;
+      const title = make('div', 'banner-pill', version ? `📋 Действующая программа: Версия ${version}` : '📋 Версия программы не подтверждена');
+      const detail = make('p', 'banner-sub', gates.detail || 'Статус согласования временно не подтверждён.');
+      container.replaceChildren(title, detail);
+    } catch (_err) {
+      const title = make('div', 'banner-pill', '📋 Статус утверждённой программы недоступен');
+      const detail = make('p', 'banner-sub', 'Повторите проверку позже; версия берётся из живого состояния TriCoach.');
+      container.replaceChildren(title, detail);
+    }
+  };
+
   const renderDashboard = manifest => {
     const dashboard = document.querySelector('[data-pane="now"]');
     if (!dashboard) return;
@@ -429,11 +446,12 @@
 
     // 1b. Active plan version notice
     const planBanner = make('div', 'active-plan-banner');
-    planBanner.innerHTML = `
-      <div class="banner-pill">📋 Действующая программа: Версия 1 (Базовый утверждённый календарь)</div>
-      <p class="banner-sub">Обновление программы ожидает утверждения спортсмена в Telegram (@Ardenisov_bot).</p>
-    `;
+    planBanner.append(
+      make('div', 'banner-pill', `📋 Действующая программа: Версия ${manifest.version_number || '—'}`),
+      make('p', 'banner-sub', 'Проверяю актуальный статус в TriCoach…'),
+    );
     dashboard.append(planBanner);
+    updateLivePlanBanner(planBanner);
 
     const target = manifest.target || {ftp_watts: 340, date: '2027-06-06'};
     const workingFtp = 290;
@@ -613,10 +631,10 @@
     privacyBox.innerHTML = `
       <div class="privacy-header">
         <span class="lock-pill">🔒 Защищённый контур биометрии Garmin</span>
-        <p>Конфиденциальные медицинские данные, сон и динамика восстановления хранятся изолированно в TriCoach. Введите ключ спортсмена для защищённого доступа.</p>
+        <p>Конфиденциальные медицинские данные и восстановление доступны только владельцу. Получите временный PIN командой <b>/telemetry_pin</b> в Telegram; срок действия — 15 минут.</p>
       </div>
       <div class="privacy-inputs">
-        <input type="password" id="telemetry-pin-input" placeholder="Введите PIN атлета" class="ftpin" style="width:180px;padding:8px 12px;" />
+        <input type="password" id="telemetry-pin-input" placeholder="PIN из Telegram" class="ftpin" style="width:180px;padding:8px 12px;" />
         <button type="button" class="btn" id="btn-telemetry-unlock" style="background:var(--acc2);color:#0f1115;font-weight:700;">Открыть телеметрию</button>
       </div>
       <div id="telemetry-secure-display" style="display:none;margin-top:14px;"></div>
@@ -657,7 +675,7 @@
           unlockBtn.textContent = 'Доступ открыт';
         } catch (_e) {
           display.style.display = 'block';
-          display.innerHTML = `<span style="color:var(--bad);">✕ Неверный PIN. Доступ к приватной телеметрии отклонён.</span>`;
+          display.innerHTML = `<span style="color:var(--bad);">✕ PIN неверный или истёк. Получите новый командой /telemetry_pin.</span>`;
           unlockBtn.textContent = 'Открыть телеметрию';
         }
       });

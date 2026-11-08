@@ -84,8 +84,9 @@ class PublicBoardContractTests(unittest.TestCase):
             script = (ROOT / fname).read_text(encoding="utf-8")
             self.assertIn("/api/mission-control/status", script)
             self.assertIn("updateLiveSystemStatus", script)
-            self.assertIn("Действующая программа: Версия 1 (Базовый утверждённый календарь)", script)
-            self.assertIn("Обновление программы ожидает утверждения спортсмена", script)
+            self.assertIn("const updateLivePlanBanner = async container =>", script)
+            self.assertIn("gates.active_version", script)
+            self.assertIn("updateLivePlanBanner(planBanner)", script)
             self.assertIn("safety-gate-status-badge", script)
 
     def test_workout_export_does_not_reimplement_plan_parser_in_browser(self):
