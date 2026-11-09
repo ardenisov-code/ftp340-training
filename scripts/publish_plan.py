@@ -77,7 +77,8 @@ def validate_manifest(manifest: Any, event: dict[str, Any]) -> None:
         raise PublishValidationError("version_number_mismatch")
     if int(manifest.get("version_id", -1)) != int(event["version_id"]):
         raise PublishValidationError("version_id_mismatch")
-    if manifest.get("target") != FIXED_TARGET:
+    target = manifest.get("target")
+    if not isinstance(target, dict) or any(target.get(k) != v for k, v in FIXED_TARGET.items()):
         raise PublishValidationError("fixed_target_mismatch")
     privacy = manifest.get("privacy") or {}
     if privacy.get("garmin_metrics_included") is not False:

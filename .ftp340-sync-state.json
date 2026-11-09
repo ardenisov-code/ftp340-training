@@ -14,10 +14,15 @@
       "manifest_sha256": "dfdf3075fe38715a174496e24941861ea88f17deb2501a59f30f9aaf79c4c000",
       "nonce": "a6fb753fa161361718332fe74d662665",
       "version_number": 3
+    },
+    {
+      "manifest_sha256": "3c14a919f766689d5c7fbf4cce33ca3c4e1a74556ce07be0d6b8113b9bb4d52d",
+      "nonce": "e2a49f8a102ee79469964b25920998dc",
+      "version_number": 4
     }
   ],
-  "current_version": 3,
-  "manifest_sha256": "dfdf3075fe38715a174496e24941861ea88f17deb2501a59f30f9aaf79c4c000",
-  "proposal_id": 18,
-  "version_id": 3
+  "current_version": 4,
+  "manifest_sha256": "3c14a919f766689d5c7fbf4cce33ca3c4e1a74556ce07be0d6b8113b9bb4d52d",
+  "proposal_id": 19,
+  "version_id": 4
 }
