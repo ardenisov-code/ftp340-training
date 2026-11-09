@@ -1,1 +1,23 @@
-{"accepted_events":[{"manifest_sha256":"a8e4eefa49da2b38cf1b69237b7cde5949926e685994ccb2d8046e84b3b14985","nonce":"cd88b8d8df41ba432ed645efb13fbf8a","version_number":1},{"manifest_sha256":"c967d7686b435d0d437dfcfd344b063acd6ba27cb96770a0a80f74d836d10139","nonce":"e970d62e198d9674fedd2086bee51f5d","version_number":2}],"current_version":2,"manifest_sha256":"c967d7686b435d0d437dfcfd344b063acd6ba27cb96770a0a80f74d836d10139","proposal_id":15,"version_id":2}
+{
+  "accepted_events": [
+    {
+      "manifest_sha256": "a8e4eefa49da2b38cf1b69237b7cde5949926e685994ccb2d8046e84b3b14985",
+      "nonce": "cd88b8d8df41ba432ed645efb13fbf8a",
+      "version_number": 1
+    },
+    {
+      "manifest_sha256": "c967d7686b435d0d437dfcfd344b063acd6ba27cb96770a0a80f74d836d10139",
+      "nonce": "e970d62e198d9674fedd2086bee51f5d",
+      "version_number": 2
+    },
+    {
+      "manifest_sha256": "dfdf3075fe38715a174496e24941861ea88f17deb2501a59f30f9aaf79c4c000",
+      "nonce": "a6fb753fa161361718332fe74d662665",
+      "version_number": 3
+    }
+  ],
+  "current_version": 3,
+  "manifest_sha256": "dfdf3075fe38715a174496e24941861ea88f17deb2501a59f30f9aaf79c4c000",
+  "proposal_id": 18,
+  "version_id": 3
+}
