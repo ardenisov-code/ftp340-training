@@ -856,7 +856,7 @@
   });
   window.openToday = () => {
     const today = localMoscowDate();
-    const week = [...document.querySelectorAll('details.week')].find(item => item.dataset.s <= today && today <= week.dataset.e);
+    const week = [...document.querySelectorAll('details.week')].find(item => item.dataset.s <= today && today <= item.dataset.e);
     if (week) {
       document.querySelectorAll('details.week').forEach(item => item.classList.toggle('selected-week', item === week));
       week.open = true;

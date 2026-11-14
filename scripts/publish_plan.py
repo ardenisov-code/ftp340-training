@@ -20,6 +20,7 @@ from typing import Any
 MAX_COMPRESSED_BYTES = 55_000
 MAX_MANIFEST_BYTES = 1_500_000
 MAX_CLOCK_SKEW = timedelta(hours=24)
+ALLOWED_TARGET_DATES = {"2027-06-06", "2027-07-11"}
 FIXED_TARGET = {
     "ftp_watts": 340,
     "date": "2027-06-06",
@@ -78,7 +79,13 @@ def validate_manifest(manifest: Any, event: dict[str, Any]) -> None:
     if int(manifest.get("version_id", -1)) != int(event["version_id"]):
         raise PublishValidationError("version_id_mismatch")
     target = manifest.get("target")
-    if not isinstance(target, dict) or any(target.get(k) != v for k, v in FIXED_TARGET.items()):
+    if (
+        not isinstance(target, dict)
+        or target.get("ftp_watts") != 340
+        or target.get("date") not in ALLOWED_TARGET_DATES
+        or target.get("discipline") != "road_cycling"
+        or target.get("race_distance_km") != [15, 100]
+    ):
         raise PublishValidationError("fixed_target_mismatch")
     privacy = manifest.get("privacy") or {}
     if privacy.get("garmin_metrics_included") is not False:
@@ -192,7 +199,7 @@ def validate_transition(current: dict[str, Any], incoming: dict[str, Any]) -> No
 
     if incoming.get("baseline_sha256") != current.get("baseline_sha256"):
         raise PublishValidationError("immutable_baseline_hash_changed")
-    if int(incoming.get("target", {}).get("ftp_watts", -1)) != 340 or incoming.get("target", {}).get("date") != "2027-06-06":
+    if int(incoming.get("target", {}).get("ftp_watts", -1)) != 340 or incoming.get("target", {}).get("date") not in ALLOWED_TARGET_DATES:
         raise PublishValidationError("fixed_target_changed")
 
     before_sessions = _session_map(current)
@@ -207,10 +214,11 @@ def validate_transition(current: dict[str, Any], incoming: dict[str, Any]) -> No
             "title", "discipline", "duration_min", "main_set", "key_numbers", "goal"
         )) or (before.get("completed") is True and after.get("completed") is not True):
             raise PublishValidationError("immutable_baseline_session_changed")
-    cutoff = date.fromisoformat(incoming["updated_at"])
+    raw_updated = incoming.get("updated_at", "")
+    cutoff = datetime.fromisoformat(raw_updated).date() if "T" in str(raw_updated) else date.fromisoformat(raw_updated)
     for day, before in before_sessions.items():
         parsed_day = date.fromisoformat(day)
-        if parsed_day <= cutoff:
+        if parsed_day < cutoff:
             after = after_sessions.get(day)
             if not after or any(before.get(key) != after.get(key) for key in (
                 "title", "discipline", "duration_min", "main_set", "key_numbers", "goal"
