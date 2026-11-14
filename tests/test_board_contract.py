@@ -95,10 +95,10 @@ class PublicBoardContractTests(unittest.TestCase):
         self.assertIn("/api/workouts/${session.date}.fit?ftp=${ftp}", script)
         self.assertNotIn("generateZwoXml", script)
 
-    def test_live_zwo_export_uses_server_parser_and_290w_reported_ftp(self):
+    def test_live_zwo_export_uses_server_parser_and_working_ftp(self):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
         self.assertIn("/api/workouts/${session.date}/zwo?ftp=${ftp}", script)
-        self.assertIn("const ftp = Number(manifest.current_ftp?.confirmed_watts || 290)", script)
+        self.assertIn("getWorkingFtp(manifest)", script)
         self.assertNotIn("const xml = generateZwoXml(session, ftp)", script)
 
     def test_board_surfaces_exports_for_next_three_uncompleted_bike_sessions(self):

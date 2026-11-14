@@ -247,7 +247,7 @@ def validate_transition(current: dict[str, Any], incoming: dict[str, Any]) -> No
         # Athlete-reported working FTP may be corrected without pretending it
         # was laboratory-confirmed. Keep confirmation state separate and only
         # allow the reported field to change while the incoming status says so.
-        if next_ftp.get("status") != "athlete_reported":
+        if next_ftp.get("status") not in ("athlete_reported", "athlete_working_ftp"):
             raise PublishValidationError("reported_ftp_change_must_remain_athlete_reported")
         try:
             if int(next_ftp.get("reported_watts")) <= 0:
