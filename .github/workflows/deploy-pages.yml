@@ -34,39 +34,7 @@ jobs:
 
       - name: Validate Plan Integrity and Sync State
         id: validate
-        run: |
-          python -c '
-          import json, hashlib, os, sys
-          from pathlib import Path
-
-          plan_file = Path("adaptive-plan.json")
-          state_file = Path(".ftp340-sync-state.json")
-          if not plan_file.exists():
-              print("No adaptive-plan.json found, skipping manifest checks.")
-              sys.exit(0)
-
-          manifest = json.loads(plan_file.read_text(encoding="utf-8"))
-          assert manifest.get("schema_version") == 1, "Invalid schema version"
-          assert manifest.get("version_number", 0) >= 1, "Invalid version number"
-          assert "weeks" in manifest and len(manifest["weeks"]) > 0, "Empty weeks array"
-
-          sys.path.insert(0, "scripts")
-          import publish_plan
-          digest = hashlib.sha256(publish_plan.canonical_json(manifest)).hexdigest()
-
-          if state_file.exists():
-              state = json.loads(state_file.read_text(encoding="utf-8"))
-              expected = state.get("manifest_sha256")
-              if expected and expected != digest:
-                  raise ValueError(f"Manifest sha256 mismatch: calculated {digest} vs sync state {expected}")
-              print(f"Verified manifest digest: {digest} matches sync state.")
-
-          gh_out = os.environ.get("GITHUB_OUTPUT")
-          if gh_out:
-              with open(gh_out, "a") as f:
-                  f.write(f"version_number={manifest.get(\"version_number\")}\n")
-                  f.write(f"manifest_sha256={digest}\n")
-          '
+        run: python scripts/validate_deployment.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
