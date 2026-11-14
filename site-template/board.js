@@ -223,8 +223,6 @@
     });
     draw(initial);
   };
-    draw();
-  };
 
   // ── Calendar Week & Day Rendering ───────────────────────────────────────────
 
