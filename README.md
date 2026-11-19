@@ -27,6 +27,20 @@ the previous approved manifest), deploys it explicitly and verifies the
 public response. Failed versions remain archived. If restoration cannot be
 verified, the callback reports `rollback_not_verified`; no success is claimed.
 
+## Manifest structure: `weeks` vs `baseline_weeks`
+
+`weeks` is the current approved Plan v5. Its only control protocol is the
+single-day **T312** test (3′ all-out + 12′ all-out, `FTP = 0.90 × P12`,
+`CP = (P12×12 − P3×3) / 9`), plus the P40 durability gate and the TTE test.
+There are no 5′/20′ FTP tests in the live plan.
+
+`baseline_weeks` is an **immutable historical archive** of the pre-v5 approved
+baseline. Publication validation requires it byte-for-byte stable
+(`immutable_baseline_sessions_changed`), so it still contains the legacy 20′
+protocol that was actually approved at the time. It is machine data for
+version history and backfill; it is not rendered by `board.js` and is not the
+current training prescription.
+
 ## Settings for deployment
 
 After review and explicit production authorization, configure Pages to use
