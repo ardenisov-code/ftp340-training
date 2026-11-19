@@ -21,13 +21,13 @@
       "version_number": 4
     },
     {
-      "manifest_sha256": "c2829934eb5957c2c78b0574c42d7e9eb619a388d1f5f0845b5a07e521892645",
+      "manifest_sha256": "7d841ae432c0da6c3a244913ac37d360aa10d16725b40299a3fe6e322622146f",
       "nonce": "a473d031cdb1b4866fdc70031349cdd0",
       "version_number": 5
     }
   ],
   "current_version": 5,
-  "manifest_sha256": "c2829934eb5957c2c78b0574c42d7e9eb619a388d1f5f0845b5a07e521892645",
+  "manifest_sha256": "7d841ae432c0da6c3a244913ac37d360aa10d16725b40299a3fe6e322622146f",
   "proposal_id": 20,
   "version_id": 5
 }
