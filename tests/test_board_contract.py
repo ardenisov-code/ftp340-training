@@ -84,20 +84,20 @@ class PublicBoardContractTests(unittest.TestCase):
             script = (ROOT / fname).read_text(encoding="utf-8")
             self.assertIn("/api/mission-control/status", script)
             self.assertIn("updateLiveSystemStatus", script)
-            self.assertIn("const updateLivePlanBanner = async container =>", script)
+            self.assertIn("const updateLivePlanBanner = async (container, publishedVersion) =>", script)
             self.assertIn("gates.active_version", script)
-            self.assertIn("updateLivePlanBanner(planBanner)", script)
+            self.assertIn("updateLivePlanBanner(planBanner, manifest.version_number)", script)
             self.assertIn("safety-gate-status-badge", script)
 
     def test_workout_export_does_not_reimplement_plan_parser_in_browser(self):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
-        self.assertIn("/api/workouts/${session.date}/zwo?ftp=${ftp}", script)
-        self.assertIn("/api/workouts/${session.date}.fit?ftp=${ftp}", script)
+        self.assertIn("/api/workouts/${session.date}.${format}", script)
+        self.assertIn("endpoint.searchParams.set('version', calendarVersion)", script)
         self.assertNotIn("generateZwoXml", script)
 
     def test_live_zwo_export_uses_server_parser_and_working_ftp(self):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
-        self.assertIn("/api/workouts/${session.date}/zwo?ftp=${ftp}", script)
+        self.assertIn("/api/workouts/${session.date}.${format}", script)
         self.assertIn("getWorkingFtp(manifest)", script)
         self.assertNotIn("const xml = generateZwoXml(session, ftp)", script)
 

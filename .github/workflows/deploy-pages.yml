@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,6 +38,17 @@ jobs:
         id: validate
         run: python scripts/validate_deployment.py
 
+      - name: Keep the approved calendar unchanged on code deployments
+        env:
+          PREVIOUS_SHA: ${{ github.event.before }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == 'push' ]]; then
+            git diff --exit-code "$PREVIOUS_SHA" HEAD -- adaptive-plan.json .ftp340-sync-state.json versions/
+          fi
+          python scripts/verify_publication.py \
+            --url "https://ardenisov-code.github.io/ftp340-training/adaptive-plan.json?preflight=${GITHUB_RUN_ID}" \
+            --version '${{ steps.validate.outputs.version_number }}' \
+            --sha256 '${{ steps.validate.outputs.manifest_sha256 }}' --attempts 4 --delay 4
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

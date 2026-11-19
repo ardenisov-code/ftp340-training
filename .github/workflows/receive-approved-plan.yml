@@ -5,7 +5,7 @@ on:
     types: [tricoach_plan_approved]
 
 concurrency:
-  group: ftp340-approved-plan-publication
+  group: pages
   cancel-in-progress: false
 
 permissions:

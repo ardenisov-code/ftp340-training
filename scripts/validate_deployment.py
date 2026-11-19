@@ -20,23 +20,16 @@ def main() -> None:
         return
 
     manifest = json.loads(plan_file.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != 1:
-        raise ValueError(f"Invalid schema version: {manifest.get('schema_version')}")
-    if manifest.get("version_number", 0) < 1:
-        raise ValueError(f"Invalid version number: {manifest.get('version_number')}")
-    if not manifest.get("weeks"):
-        raise ValueError("Empty weeks array")
-
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    event = {"version_number": state["current_version"], "version_id": state["version_id"]}
+    publish_plan.validate_manifest(manifest, event)
     digest = hashlib.sha256(publish_plan.canonical_json(manifest)).hexdigest()
-
-    if state_file.exists():
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-        expected = state.get("manifest_sha256")
-        if expected and expected != digest:
-            raise ValueError(f"Manifest sha256 mismatch: calculated {digest} vs sync state {expected}")
-        print(f"Verified manifest digest: {digest} matches sync state.")
-    else:
-        print(f"Verified manifest schema & structure. Digest: {digest}")
+    if digest != state.get("manifest_sha256"):
+        raise ValueError("The calendar does not match the approved publication ledger")
+    archive = ROOT / "versions" / f"ftp340-plan-v{manifest['version_number']}.json"
+    if json.loads(archive.read_text(encoding="utf-8")) != manifest:
+        raise ValueError("The active calendar does not match its archived version")
+    print(f"Verified approved manifest digest: {digest}")
 
     gh_out = os.environ.get("GITHUB_OUTPUT")
     if gh_out:
