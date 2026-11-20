@@ -225,3 +225,81 @@ h2, h3 { color: var(--ink); }
   .metric { padding: 13px; }
   .metric b { font-size: 22px; }
 }
+
+/* ── Pure Vanilla SVG Workout Interval Visualizer ── */
+.workout-viz-container {
+  margin: 10px 0 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.workout-viz-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 42px;
+  overflow: visible;
+}
+.workout-viz-svg rect {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.workout-viz-svg rect:hover {
+  opacity: 0.85;
+}
+
+/* ── Fact vs Plan Box ── */
+.session-fact-box {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+.fact-metrics-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+.fact-metric {
+  font-size: 13px;
+  font-weight: 700;
+  color: #34d399;
+}
+
+/* ── 34-Week Milestone Roadmap ── */
+.dt-roadmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.dt-milestone-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.dt-milestone-card.active-target {
+  border-color: rgba(195, 166, 108, 0.6);
+  background: rgba(195, 166, 108, 0.08);
+}
+.dt-milestone-card small {
+  display: block;
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.dt-milestone-card b {
+  display: block;
+  font-size: 15px;
+  margin: 4px 0;
+}
+.dt-milestone-card span {
+  font-size: 12px;
+  color: var(--dim);
+}

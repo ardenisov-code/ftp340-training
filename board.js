@@ -207,6 +207,102 @@
     draw(initial);
   };
 
+  // ── Pure Vanilla SVG Workout Interval Visualizer ────────────────────────────
+
+  const renderWorkoutVisualizer = (session, ftp) => {
+    if (session.discipline !== 'bike') return null;
+    const dur = Number(session.duration_min) || 60;
+    const workingFtp = ftp || 280;
+
+    const intervals = [];
+    const warmupDur = session.warmup ? (parseInt(session.warmup, 10) || 15) : 12;
+    intervals.push({ label: 'Разминка Z1/Z2', duration: warmupDur, pct: 62, zone: 'z2' });
+
+    const mainText = (session.main_set || '').toLowerCase();
+    const remainDur = Math.max(dur - warmupDur - 8, 20);
+
+    if (mainText.includes('30/15') || mainText.includes('vo₂') || mainText.includes('vo2')) {
+      const sets = mainText.includes('3×') ? 3 : 2;
+      const setDur = Math.floor(remainDur / sets);
+      for (let s = 0; s < sets; s++) {
+        intervals.push({ label: 'Серия 30/15 @ 125%', duration: Math.floor(setDur * 0.7), pct: 125, zone: 'z6' });
+        if (s < sets - 1) {
+          intervals.push({ label: 'Отдых Z1', duration: Math.floor(setDur * 0.3), pct: 50, zone: 'z1' });
+        }
+      }
+    } else if (mainText.includes('порог') || mainText.includes('threshold') || mainText.includes('sweet spot') || mainText.includes('t20') || mainText.includes('t5')) {
+      const reps = mainText.includes('4×') ? 4 : (mainText.includes('3×') ? 3 : 2);
+      const repDur = Math.floor(remainDur / (reps * 1.35));
+      const restDur = Math.floor(repDur * 0.35);
+      for (let r = 0; r < reps; r++) {
+        intervals.push({ label: 'Порог Z4 @ 95–100%', duration: repDur, pct: 98, zone: 'z4' });
+        if (r < reps - 1) intervals.push({ label: 'Отдых Z1', duration: restDur, pct: 50, zone: 'z1' });
+      }
+    } else if (mainText.includes('темп') || mainText.includes('tempo')) {
+      intervals.push({ label: 'Темп Z3 @ 80–88%', duration: remainDur, pct: 85, zone: 'z3' });
+    } else {
+      intervals.push({ label: 'База Z2 @ 65–72%', duration: remainDur, pct: 68, zone: 'z2' });
+    }
+
+    const cooldownDur = Math.max(dur - intervals.reduce((acc, i) => acc + i.duration, 0), 5);
+    intervals.push({ label: 'Заминка Z1', duration: cooldownDur, pct: 50, zone: 'z1' });
+
+    const svgWidth = 360;
+    const svgHeight = 38;
+    const totalMin = intervals.reduce((acc, i) => acc + i.duration, 0);
+    const zoneColors = {
+      z1: '#64748B',
+      z2: '#06B6D4',
+      z3: '#10B981',
+      z4: '#F59E0B',
+      z5: '#EF4444',
+      z6: '#A855F7',
+    };
+
+    const container = make('div', 'workout-viz-container');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+    svg.setAttribute('class', 'workout-viz-svg');
+    svg.setAttribute('role', 'img');
+
+    const lineY = Math.round(svgHeight - (100 / 140) * (svgHeight - 6));
+    const ftpLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ftpLine.setAttribute('x1', '0');
+    ftpLine.setAttribute('x2', String(svgWidth));
+    ftpLine.setAttribute('y1', String(lineY));
+    ftpLine.setAttribute('y2', String(lineY));
+    ftpLine.setAttribute('stroke', 'rgba(255,255,255,0.3)');
+    ftpLine.setAttribute('stroke-dasharray', '3,3');
+    ftpLine.setAttribute('stroke-width', '1');
+
+    let currentX = 0;
+    intervals.forEach(inv => {
+      const blockWidth = Math.max((inv.duration / totalMin) * svgWidth, 2);
+      const blockHeight = Math.min(Math.round((inv.pct / 140) * (svgHeight - 6)), svgHeight - 4);
+      const rectY = svgHeight - blockHeight;
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', currentX.toFixed(1));
+      rect.setAttribute('y', String(rectY));
+      rect.setAttribute('width', Math.max(blockWidth - 1, 1).toFixed(1));
+      rect.setAttribute('height', String(blockHeight));
+      rect.setAttribute('rx', '2');
+      rect.setAttribute('fill', zoneColors[inv.zone] || '#06B6D4');
+
+      const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      const w = Math.round(workingFtp * (inv.pct / 100));
+      titleEl.textContent = `${inv.label}: ~${w} Вт (${inv.pct}%) · ${inv.duration} мин`;
+      rect.appendChild(titleEl);
+
+      svg.appendChild(rect);
+      currentX += blockWidth;
+    });
+
+    svg.appendChild(ftpLine);
+    container.append(svg);
+    return container;
+  };
+
   // ── Calendar Week & Day Rendering ───────────────────────────────────────────
 
   const renderWeek = (week, ftp) => {
@@ -235,7 +331,21 @@
       const title = make('h4');
       title.append(make('span', `tag ${tagClass}`, kind), document.createTextNode(` ${session.title || 'Тренировка'}`));
       content.append(title);
-      if (session.completed) content.append(make('p', 'session-complete', '✓ Выполнено · отметка из проверенной истории тренировок'));
+      if (session.completed) {
+        const factBox = make('div', 'session-fact-box');
+        factBox.append(make('span', 'tag done', '✓ Выполнено по факту'));
+        const metricsRow = make('div', 'fact-metrics-grid');
+        const dur = session.actual_duration_min || session.duration_min;
+        const np = session.actual_np || session.normalized_power_watts;
+        const avgP = session.actual_avg_power || session.average_power_watts;
+        const ifVal = np && ftp ? (np / ftp).toFixed(2) : null;
+        if (dur) metricsRow.append(make('span', 'fact-metric', `⏱️ ${dur} мин`));
+        if (np) metricsRow.append(make('span', 'fact-metric', `⚡ NP ${np} Вт`));
+        else if (avgP) metricsRow.append(make('span', 'fact-metric', `⚡ Ср ${avgP} Вт`));
+        if (ifVal) metricsRow.append(make('span', 'fact-metric', `🎯 IF ${ifVal}`));
+        factBox.append(metricsRow);
+        content.append(factBox);
+      }
       if (session.duration_min) content.append(make('p', 'session-duration', formatDuration(session.duration_min)));
       if (session.goal) content.append(make('p', 'goal', session.goal));
       if (session.warmup) content.append(make('p', 'session-warmup', sessionWattText(session.warmup, ftp)));
@@ -243,6 +353,10 @@
       if (session.cooldown) content.append(make('p', 'session-cooldown', sessionWattText(session.cooldown, ftp)));
       if (session.cadence) content.append(make('p', 'session-cadence', session.cadence));
       if (session.key_numbers) content.append(make('p', 'session-key-numbers', sessionWattText(session.key_numbers, ftp)));
+      if (session.discipline === 'bike') {
+        const viz = renderWorkoutVisualizer(session, ftp);
+        if (viz) content.append(viz);
+      }
       const referenceFtp = Number(session.source_reference_ftp_watts || 0);
       if (referenceFtp && ftp && referenceFtp !== ftp) {
         content.append(make('p', 'session-ftp-warning', `Исходные проценты этого блока рассчитаны при FTP ${referenceFtp} Вт; текущий рабочий FTP — ${ftp} Вт. Экспорт сохраняет явно заданные в плане ватты, а проценты без ватт считает от текущего FTP.`));
@@ -654,12 +768,53 @@
     `;
 
     const testsCard = make('article', 'card dt-tests-card');
-    testsCard.append(make('h3', '', 'Контрольные тесты по календарю'));
+    testsCard.innerHTML = `
+      <h3>🎯 Контрольные тесты и вехи Плана v5 (P5 + P20 + P40)</h3>
+      <div class="dt-roadmap">
+        <div class="dt-milestone-card active-target">
+          <small>Неделя 1–2 (Ноябрь 2026)</small>
+          <b>280 Вт (Баслайн)</b>
+          <span>T5 · T20 · P40 срезы</span>
+        </div>
+        <div class="dt-milestone-card">
+          <small>Неделя 10 (Январь 2027)</small>
+          <b>≥ 295 Вт (Чекпоинт 1)</b>
+          <span>T5 + T20 срезы</span>
+        </div>
+        <div class="dt-milestone-card">
+          <small>Неделя 17–18 (Март 2027)</small>
+          <b>≥ 310 Вт (Чекпоинт 2)</b>
+          <span>TTE-тест + P40</span>
+        </div>
+        <div class="dt-milestone-card">
+          <small>Неделя 26 (Май 2027)</small>
+          <b>≥ 325 Вт (Чекпоинт 3)</b>
+          <span>T5 + T20 срезы</span>
+        </div>
+        <div class="dt-milestone-card">
+          <small>Неделя 34 (Июль 2027)</small>
+          <b class="lime">340 Вт (ФИНАЛ)</b>
+          <span>4.25 Вт/кг @ 80 кг</span>
+        </div>
+      </div>
+    `;
     const testList = make('ul', 'test-milestones-list');
+    testList.style.marginTop = '14px';
     const tests = (manifest.weeks || []).flatMap(week => week.days || [])
       .filter(session => session.date >= localMoscowDate() && /^ТЕСТ(?:\s|$)/u.test(session.title || ''));
-    for (const session of tests) {
-      testList.append(make('li', '', `${formatDate(session.date)} · ${session.title}`));
+    if (tests.length) {
+      for (const session of tests) {
+        testList.append(make('li', '', `${formatDate(session.date)} · ${session.title}`));
+      }
+    } else {
+      [
+        '22.11.2026 (Неделя 1): ТЕСТ T5 (5\' all-out) — калибровка пиковой аэробной мощности (MAP).',
+        '26.11.2026 (Неделя 2): ТЕСТ T20 (20\' all-out) — подтверждение рабочего FTP (0.95 × P20).',
+        '29.11.2026 (Неделя 2): ТЕСТ P40 (40\' best effort) — базовый срез пороговой выносливости.',
+        'Январь 2027 (Неделя 10): Контрольный срез Блока 2 (T5 + T20) → проверка темпа роста FTP.',
+        'Март 2027 (Неделя 17–18): TTE-тест (95% continuous) + срезы T5 / T20 / P40.',
+        'Июль 2027 (Неделя 34): Финальный вердикт: цель 336–340 Вт (T5, T20, P40).',
+      ].forEach(text => testList.append(make('li', '', text)));
     }
     testsCard.append(testList);
 
@@ -886,6 +1041,28 @@
       if (!response.ok) throw new Error('plan_unavailable');
       const manifest = await response.json();
       calendarVersion = manifest.version_number;
+
+      // Live Hybrid Rendering: Overlay verified completion & power telemetry from API
+      try {
+        const liveRes = await fetch('https://tricoach-garmin.onrender.com/api/plan/live-status', {
+          headers: { 'Accept': 'application/json' },
+        });
+        if (liveRes.ok) {
+          const liveData = await liveRes.json();
+          if (liveData && liveData.completed_sessions) {
+            (manifest.weeks || []).forEach(w => {
+              (w.days || []).forEach(d => {
+                if (liveData.completed_sessions[d.date]) {
+                  d.completed = true;
+                  Object.assign(d, liveData.completed_sessions[d.date]);
+                }
+              });
+            });
+          }
+        }
+      } catch (_e) {
+        // Standalone / offline fallback
+      }
       const chip = document.querySelector('.date-chip');
       if (chip && manifest.target) {
         chip.textContent = `Цель FTP ${manifest.target.ftp_watts || 340} · ${formatDate(manifest.target.date || '2027-07-11')}`;
