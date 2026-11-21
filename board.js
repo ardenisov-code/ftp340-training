@@ -271,9 +271,12 @@
     ftpLine.setAttribute('x2', String(svgWidth));
     ftpLine.setAttribute('y1', String(lineY));
     ftpLine.setAttribute('y2', String(lineY));
-    ftpLine.setAttribute('stroke', 'rgba(255,255,255,0.3)');
-    ftpLine.setAttribute('stroke-dasharray', '3,3');
-    ftpLine.setAttribute('stroke-width', '1');
+    ftpLine.setAttribute('stroke', 'rgba(245, 158, 11, 0.75)');
+    ftpLine.setAttribute('stroke-dasharray', '4,3');
+    ftpLine.setAttribute('stroke-width', '1.2');
+    const ftpTitle = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    ftpTitle.textContent = `100% FTP (${workingFtp} Вт)`;
+    ftpLine.append(ftpTitle);
 
     let currentX = 0;
     intervals.forEach(inv => {
@@ -336,10 +339,15 @@
         factBox.append(make('span', 'tag done', '✓ Выполнено по факту'));
         const metricsRow = make('div', 'fact-metrics-grid');
         const dur = session.actual_duration_min || session.duration_min;
+        const durDelta = (session.actual_duration_min && session.duration_min && session.actual_duration_min !== session.duration_min)
+          ? (session.actual_duration_min - session.duration_min) : null;
         const np = session.actual_np || session.normalized_power_watts;
         const avgP = session.actual_avg_power || session.average_power_watts;
         const ifVal = np && ftp ? (np / ftp).toFixed(2) : null;
-        if (dur) metricsRow.append(make('span', 'fact-metric', `⏱️ ${dur} мин`));
+        if (dur) {
+          const deltaStr = durDelta !== null ? ` (${durDelta > 0 ? '+' : ''}${durDelta}м)` : '';
+          metricsRow.append(make('span', 'fact-metric', `⏱️ ${dur} мин${deltaStr}`));
+        }
         if (np) metricsRow.append(make('span', 'fact-metric', `⚡ NP ${np} Вт`));
         else if (avgP) metricsRow.append(make('span', 'fact-metric', `⚡ Ср ${avgP} Вт`));
         if (ifVal) metricsRow.append(make('span', 'fact-metric', `🎯 IF ${ifVal}`));
@@ -775,26 +783,31 @@
           <small>Неделя 1–2 (Ноябрь 2026)</small>
           <b>280 Вт (Баслайн)</b>
           <span>T5 · T20 · P40 срезы</span>
+          <span class="badge-status current">ТЕКУЩИЙ</span>
         </div>
         <div class="dt-milestone-card">
           <small>Неделя 10 (Январь 2027)</small>
           <b>≥ 295 Вт (Чекпоинт 1)</b>
           <span>T5 + T20 срезы</span>
+          <span class="badge-status upcoming">В ПЛАНЕ</span>
         </div>
         <div class="dt-milestone-card">
           <small>Неделя 17–18 (Март 2027)</small>
           <b>≥ 310 Вт (Чекпоинт 2)</b>
           <span>TTE-тест + P40</span>
+          <span class="badge-status upcoming">В ПЛАНЕ</span>
         </div>
         <div class="dt-milestone-card">
           <small>Неделя 26 (Май 2027)</small>
           <b>≥ 325 Вт (Чекпоинт 3)</b>
           <span>T5 + T20 срезы</span>
+          <span class="badge-status upcoming">В ПЛАНЕ</span>
         </div>
         <div class="dt-milestone-card">
           <small>Неделя 34 (Июль 2027)</small>
           <b class="lime">340 Вт (ФИНАЛ)</b>
           <span>4.25 Вт/кг @ 80 кг</span>
+          <span class="badge-status final">ФИНАЛ</span>
         </div>
       </div>
     `;
@@ -1049,15 +1062,26 @@
         });
         if (liveRes.ok) {
           const liveData = await liveRes.json();
-          if (liveData && liveData.completed_sessions) {
-            (manifest.weeks || []).forEach(w => {
-              (w.days || []).forEach(d => {
-                if (liveData.completed_sessions[d.date]) {
-                  d.completed = true;
-                  Object.assign(d, liveData.completed_sessions[d.date]);
-                }
+          if (liveData) {
+            if (liveData.date_overrides) {
+              (manifest.weeks || []).forEach(w => {
+                (w.days || []).forEach(d => {
+                  if (liveData.date_overrides[d.date]) {
+                    Object.assign(d, liveData.date_overrides[d.date]);
+                  }
+                });
               });
-            });
+            }
+            if (liveData.completed_sessions) {
+              (manifest.weeks || []).forEach(w => {
+                (w.days || []).forEach(d => {
+                  if (liveData.completed_sessions[d.date]) {
+                    d.completed = true;
+                    Object.assign(d, liveData.completed_sessions[d.date]);
+                  }
+                });
+              });
+            }
           }
         }
       } catch (_e) {
