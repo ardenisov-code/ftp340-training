@@ -212,6 +212,29 @@
     draw(initial);
   };
 
+  // Some public descriptions omit pulse targets for privacy. Structured export
+  // steps contain the planned targets; never infer them from athlete telemetry.
+  const plannedHrIntervals = session => {
+    const groups = new Map();
+    for (const step of session.export_steps || []) {
+      const {duration_sec: seconds, heart_rate_low_bpm: low, heart_rate_high_bpm: high} = step;
+      if (step.type !== 'interval' || !Number.isFinite(seconds) || seconds <= 0 ||
+          !Number.isFinite(low) || !Number.isFinite(high) || low > high) continue;
+      const key = `${seconds}|${low}|${high}`;
+      groups.set(key, (groups.get(key) || 0) + 1);
+    }
+    return [...groups].map(([key, count]) => {
+      const [seconds, low, high] = key.split('|').map(Number);
+      const duration = seconds % 60 === 0 ? `${seconds / 60} мин` : `${seconds} с`;
+      return `${count > 1 ? `${count} × ` : ''}${duration} · ЧСС ${low}–${high} уд/мин`;
+    }).join('; ');
+  };
+  const weekPresentation = week => {
+    const statuses = new Set((week.days || []).map(day => day.source_ftp_status).filter(Boolean));
+    return statuses.has('confirmed_ftp_baseline') && statuses.has('athlete_reported')
+      ? {block: 'Переходная неделя', rationale: 'История и новая программа: ориентируйтесь на занятия по дням.'}
+      : {block: week.block || 'План', rationale: week.block_rationale || 'Утверждённый микроцикл программы.'};
+  };
   const renderSessionPhases = session => {
     const phases = make('dl', 'workout-phases');
     for (const [key, label] of [['warmup', 'Разминка'], ['main_set', 'Основная часть'], ['cooldown', 'Заминка']]) {
@@ -220,12 +243,19 @@
       row.append(make('dt', '', label), make('dd', '', session[key]));
       phases.append(row);
     }
+    const targets = plannedHrIntervals(session);
+    if (targets) {
+      const row = make('div', 'workout-phase');
+      row.append(make('dt', '', 'Плановые интервалы'), make('dd', '', targets));
+      phases.append(row);
+    }
     return phases;
   };
 
   // ── Calendar Week & Day Rendering ───────────────────────────────────────────
 
   const renderWeek = (week, ftp) => {
+    const display = weekPresentation(week);
     const details = make('details', 'week');
     details.id = `w${week.week_number}`;
     const days = Array.isArray(week.days) ? week.days : [];
@@ -236,8 +266,8 @@
     summary.append(
       make('span', 'wn', `Неделя ${week.week_number}`),
       make('span', 'wd', dates.length ? `${formatDate(dates[0])} – ${formatDate(dates[dates.length - 1])}` : ''),
-      make('span', 'tag load', week.block || 'План'),
-      make('span', 'wf', week.block_rationale || 'Утверждённый микроцикл программы.'),
+      make('span', 'tag load', display.block),
+      make('span', 'wf', display.rationale),
       make('span', 'wh', `${days.filter(day => day.discipline === 'bike').length} вело · ${days.filter(day => day.discipline === 'strength').length} силовых`),
     );
     details.append(summary);
@@ -360,7 +390,7 @@
     }
     const groups = new Map();
     weeks.forEach(week => {
-      const label = week.block || 'Тренировочный блок';
+      const label = weekPresentation(week).block;
       if (!groups.has(label)) groups.set(label, []);
       groups.get(label).push(week);
     });
@@ -370,7 +400,7 @@
       const card = make('article', 'card');
       card.append(make('h3', '', label));
       card.append(make('p', '', `${first ? formatDate(first) : ''}${last ? ` – ${formatDate(last)}` : ''} · ${blockWeeks.length} недель`));
-      if (blockWeeks[0]?.block_rationale) card.append(make('p', '', blockWeeks[0].block_rationale));
+      if (blockWeeks[0]) card.append(make('p', '', weekPresentation(blockWeeks[0]).rationale));
       mount.append(card);
     });
   };
