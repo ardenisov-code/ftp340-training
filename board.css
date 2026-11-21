@@ -1633,3 +1633,138 @@ table.ztab td.calc-power {
   .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .tab { min-width: 0; padding-inline: 1px; white-space: normal; font-size: 10px; line-height: 1.2; letter-spacing: 0; }
 }
+
+/* ВелоМощь / daylight editorial system */
+:root {
+  color-scheme: light;
+  --bg-canvas: #f7f6f2; --bg-surface: #eeeee9; --bg-card: #fff;
+  --bg-card-hover: #f6f8ff; --bg-card-solid: #fff; --bg-elevated: #f0f3fc;
+  --border-subtle: #e2e6e3; --border-medium: #cbd3d0; --border-highlight: #acbcfc;
+  --action: #3158e8; --neon-cyan: #3158e8; --cyan-soft: #3158e8;
+  --racing-emerald: #16755c; --emerald-soft: #16755c; --hyper-amber: #a75b0b;
+  --amber-soft: #a75b0b; --redline-crimson: #bd3932; --crimson-soft: #bd3932;
+  --laser-purple: #7650b5; --purple-soft: #7650b5;
+  --text-primary: #14232b; --text-secondary: #53646b; --text-muted: #67787d; --text-dark: #fff;
+  --bg: #f7f6f2; --ink: #14232b; --fg: #14232b; --dim: #53646b; --mut: #67787d;
+  --panel: #fff; --panel-soft: #edf1f5; --line: #e2e6e3; --lime: #16755c; --lime-deep: #16755c;
+  --cyan: #3158e8; --acc: #3158e8; --acc2: #3158e8; --ok: #16755c; --warn: #a75b0b;
+  --bad: #bd3932; --danger: #bd3932; --safe: #16755c; --card: #fff; --card2: #f1f4fa;
+}
+html { color-scheme: light; }
+body { background: #f7f6f2; color: #14232b; }
+.wrap { max-width: 1260px; padding-top: 30px; }
+.board-shell { margin-top: -30px; padding-top: 20px; background: rgba(247,246,242,.94); backdrop-filter: blur(18px); border-bottom: 1px solid #e5e7e1; }
+.brand-row { min-height: 42px; }
+.brand-name, .brand-title { color: #14232b; letter-spacing: -.035em; text-transform: none; font-size: 20px; font-weight: 850; }
+.brand-crest, .bolt { width: 36px; height: 36px; border-radius: 12px; color: white; background: #3158e8; box-shadow: 0 6px 14px rgba(49,88,232,.23); }
+.date-chip, .countdown-chip { background: #fff; border-color: #e4e8e6; color: #52616b; font-family: var(--font-sans); font-weight: 700; }
+.tabbar { margin-top: 17px; padding: 5px; border: 1px solid #e4e8e6; border-radius: 16px; background: #edeee9; }
+.tab { min-height: 44px; padding: 8px 18px; border-radius: 12px; color: #52616b; letter-spacing: 0; font-size: 13px; }
+.tab:hover { color: #233aaf; background: #fff; }
+.tab[aria-current="page"] { color: #2345c4; background: #fff; border-color: #fff; box-shadow: 0 2px 9px rgba(27,49,66,.08); }
+.tab::before { display: inline-block; margin-right: 7px; color: #5572d9; font-size: 15px; line-height: 1; }
+.tab[data-tab="now"]::before { content: '◷'; }
+.tab[data-tab="plan"]::before { content: '▦'; }
+.tab[data-tab="ftp340"]::before { content: '↗'; }
+.tab[data-tab="coach"]::before { content: '✳'; }
+.tab[data-tab="guide"]::before { content: '◇'; }
+.training-week-heading { position: relative; overflow: hidden; min-height: 154px; margin: 0 0 16px; padding: 28px 32px; border-radius: 24px; background: linear-gradient(110deg,#e6edff 0%,#edf6f2 66%,#f9e5d5 100%); }
+.training-week-heading::before { content: 'ТРЕНИРОВОЧНЫЙ ДНЕВНИК  /  ВЕЛОМОЩЬ'; display: block; margin-bottom: 12px; color: #4d67a9; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
+.training-week-heading::after { content: ''; position: absolute; right: 48px; top: -82px; width: 250px; height: 250px; border: 1px solid rgba(49,88,232,.18); border-radius: 50%; box-shadow: 0 0 0 22px rgba(255,255,255,.18), 0 0 0 23px rgba(49,88,232,.12), 0 0 0 45px rgba(255,255,255,.13), 0 0 0 46px rgba(49,88,232,.08); pointer-events: none; }
+.training-week-heading h1 { position: relative; z-index: 1; color: #17282f; font-size: clamp(34px,4.5vw,52px); font-weight: 850; letter-spacing: -.055em; }
+.training-week-heading p { position: relative; z-index: 1; margin-top: 9px; color: #536a72; font-size: 14px; font-weight: 600; }
+.training-week-days { gap: 9px; margin-bottom: 16px; }
+.training-week-day { min-height: 92px; padding: 13px 2px; border-radius: 17px; border-color: #e7eae6; background: #fff; color: #667780; box-shadow: 0 4px 18px rgba(31,49,57,.035); }
+.training-week-day:hover { background: #eef2ff; border-color: #c5d1fc; }
+.training-week-day[aria-pressed="true"] { background: #3158e8; border-color: #3158e8; color: #e4eaff; box-shadow: 0 8px 22px rgba(49,88,232,.24); }
+.training-day-date { color: #182a32; font-size: 23px; letter-spacing: -.04em; }
+.training-week-day[aria-pressed="true"] .training-day-date { color: #fff; }
+.training-day-name { text-transform: uppercase; font-size: 10px; letter-spacing: .06em; }
+.training-day-discipline { font-size: 11px; }
+.training-day-card { position: relative; overflow: hidden; padding: clamp(22px,3.1vw,36px); border: 1px solid #e6eae7; border-radius: 24px; background: #fff; box-shadow: 0 12px 38px rgba(33,55,65,.055); }
+.training-day-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 5px; background: linear-gradient(#3158e8,#a4d7bd); }
+.training-selected-date { color: #3158e8; text-transform: uppercase; font-size: 11px; letter-spacing: .09em; margin-bottom: 13px; }
+.training-day-card h2 { color: #14232b; font-size: clamp(23px,3vw,32px); letter-spacing: -.045em; }
+.training-duration { display: inline-flex; align-items: center; min-height: 36px; padding: 5px 13px; color: #3158e8; background: #eef2ff; border-radius: 30px; font-weight: 800; }
+.training-session-goal { color: #627178; font-size: 15px; }
+.workout-phases { margin: 22px 0 18px; border-color: #e9eeeb; }
+.workout-phase { padding: 14px 0; border-color: #e9eeeb; font-size: 14px; }
+.workout-phase dt { color: #77888a; }
+.workout-phase dd { color: #263b43; font-weight: 600; }
+.training-session-actions { gap: 8px 18px; align-items: center; }
+.workout-download { min-height: 46px; padding: 10px 17px; border-radius: 12px; color: #2642ab; background: #eef2ff; border-color: #e0e6ff; }
+.workout-download-zwo, .workout-download-zwo:hover { color: #fff; background: #3158e8; border-color: #3158e8; }
+.workout-link { color: #3158e8; text-underline-offset: 4px; }
+.training-week-links { margin: 8px 0 16px; }
+.training-week-metrics { gap: 12px; }
+.training-metric { min-height: 126px; padding: 18px 20px; border: 1px solid #e8ebe7; border-radius: 20px; background: #fff; color: #66777d; box-shadow: 0 5px 22px rgba(31,49,57,.035); }
+.training-metric:first-child { background: #e9f4ef; border-color: #e9f4ef; }
+.training-metric:nth-child(2) { background: #ebefff; border-color: #ebefff; }
+.training-metric:nth-child(3) { background: #fceee4; border-color: #fceee4; }
+.training-metric span { font-size: 12px; font-weight: 700; }
+.training-metric strong { margin: 4px 0 3px; color: #14232b; font-size: clamp(24px,2.5vw,32px); letter-spacing: -.045em; }
+.training-metric small { color: #5a6d71; font-size: 11px; }
+.training-service-status { margin-top: 18px; color: #596b70; }
+.metric, .card, .checkin, .review-card, .session-card { border-color: #e5eae7; background: #fff; box-shadow: 0 8px 28px rgba(30,48,60,.055); }
+.metric:hover, .card:hover { border-color: #c8d5f9; box-shadow: 0 12px 28px rgba(30,48,60,.08); }
+.metric-val, .metric b, .day h4, .next-bike-export-panel h3, .next-bike-export-details strong, .dt-header h2, .dt-milestone-card b, .cp-item b { color: #14232b; }
+.btn { background: #f1f4ff; border-color: #e0e6ff; color: #2846bb; }
+.btn:hover { background: #e5ebff; border-color: #c5d1fc; color: #1f3ba8; }
+.workout-download-zwo, .workout-download-zwo:hover { color: #fff; background: #3158e8; border-color: #3158e8; }
+details.week > summary { background: #f4f7f7; }
+details.week > summary:hover { background: #eaf0f9; }
+details.week > summary .wn { background: #e8efff; border-color: #d9e3ff; color: #3158e8; }
+details.week[open] { border-color: #cbd7fa; }
+.plan-tools { background: #fff; }
+.plan-tools button { color: #3158e8; background: #eef2ff; border-color: #dbe4ff; min-height: 44px; }
+.plan-tools button:hover { color: #203da7; background: #e1eaff; border-color: #bacafa; }
+.next-bike-export-row { background: #f7f9f8; }
+.next-bike-export-row:hover { background: #f0f4ff; border-color: #cbd8ff; }
+.ftp-current, .ftpin input, #ftp-reference { color: #14232b; }
+table.ztab th { background: #edf2f3; color: #53646b; }
+.guide-switch button.active { background: #eaf0ff; color: #2345c4; box-shadow: none; }
+.workout-download-status.export-error { color: #af302b; }
+.workout-import-dialog { background: #fff; border-radius: 22px; box-shadow: 0 24px 70px rgba(20,35,43,.22); }
+.workout-import-dialog::backdrop { background: rgba(20,35,43,.45); }
+.k-rest { color: #53646b; background: #edf1ef; }
+@media (max-width: 580px) {
+  .wrap { padding: 16px 14px 70px; }
+  .board-shell { margin-top: -16px; padding-top: 13px; }
+  .brand-name { font-size: 18px; }
+  .tabbar { margin-top: 12px; gap: 2px; }
+  .tab { padding: 7px 10px; font-size: 12px; }
+  .tab::before { display: none; }
+  .training-week-heading { min-height: 132px; padding: 22px 20px; border-radius: 20px; }
+  .training-week-heading::after { width: 170px; height: 170px; top: -65px; right: -34px; }
+  .training-week-heading h1 { font-size: 32px; }
+  .training-week-heading p { font-size: 12px; }
+  .training-week-days { gap: 4px; }
+  .training-week-day { min-height: 76px; padding: 9px 0; border-radius: 12px; }
+  .training-day-date { font-size: 20px; }
+  .training-day-discipline { font-size: 10px; }
+  .training-day-card { border-radius: 20px; padding: 22px 18px; }
+  .training-metric { min-height: 112px; padding: 13px 10px; border-radius: 15px; }
+  .training-metric strong { font-size: 21px; }
+}
+@media (max-width: 360px) {
+  .tabbar { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); }
+  .tab { min-width: 0; padding: 6px 1px; font-size: 10px; white-space: normal; line-height: 1.15; }
+}
+/* Readability across the calendar, knowledge and coach sections. */
+.block { background: #fff; border-color: #e5eae7; border-left: 4px solid #96cdb5; box-shadow: 0 8px 24px rgba(30,48,60,.04); }
+.block h3 { color: #14232b; }
+.notes { color: #8a571a; }
+.tag.rest, .tag.off, .k-rest, .badge-status.upcoming { color: #53646b; background: #edf1ef; border-color: #dce4e0; }
+.coach-connect-box { color: #14232b; background: linear-gradient(120deg,#e9f0ff,#e9f5ef); border-color: #dce7ef; }
+.dt-uncalibrated-notice, .caveats-box { color: #53646b; }
+.day:hover { background: #f9fbfa; }
+.session-main-set { background: #f7f9f7; }
+.training-week-day:focus-visible, .tab:focus-visible, .btn:focus-visible, .workout-link:focus-visible { outline: 3px solid #2c53db; outline-offset: 3px; }
+/* One consistent set of decorative line icons; button labels remain accessible. */
+.tab::before { content: '' !important; width: 16px; height: 16px; vertical-align: -3px; background: currentColor; opacity: .8; mask-position: center; mask-repeat: no-repeat; mask-size: contain; }
+.tab[data-tab="now"]::before { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E"); }
+.tab[data-tab="plan"]::before { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='3'/%3E%3Cpath d='M7 3v4M17 3v4M3 10h18M8 14h2M14 14h2M8 18h2'/%3E%3C/svg%3E"); }
+.tab[data-tab="ftp340"]::before { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18l6-6 4 4 7-9M15 7h5v5'/%3E%3C/svg%3E"); }
+.tab[data-tab="coach"]::before { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3zM19 17v4M17 19h4'/%3E%3C/svg%3E"); }
+.tab[data-tab="guide"]::before { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5.5c3-1 5.5-.7 8 1v13c-2.5-1.7-5-2-8-1zM20 5.5c-3-1-5.5-.7-8 1v13c2.5-1.7 5-2 8-1z'/%3E%3C/svg%3E"); }
+@media (max-width: 580px) { .tab::before { display: none; } }
