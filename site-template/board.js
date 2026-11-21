@@ -252,8 +252,8 @@
     const totalMin = intervals.reduce((acc, i) => acc + i.duration, 0);
     const zoneColors = {
       z1: '#64748B',
-      z2: '#06B6D4',
-      z3: '#10B981',
+      z2: '#10B981',
+      z3: '#06B6D4',
       z4: '#F59E0B',
       z5: '#EF4444',
       z6: '#A855F7',
@@ -623,17 +623,20 @@
 
     // 2. Hero Mission Header
     const hero = make('div', 'hero mission-hero');
-    const left = make('div');
-    left.append(
-      make('p', 'eyebrow', 'MISSION CONTROL · ВЕЛОМОЩЬ 2.0'),
-      make('h1', '', 'Фокус дня'),
-      make('p', 'hero-copy', `Стратегическая цель: FTP ${targetFtp} Вт к ${formatDate(targetDate)} (${targetDate}). Разрыв: ${gap} Вт. Рабочий FTP: ${workingFtp} Вт (${isConfirmed ? 'подтверждён' : 'заявлен'}).`),
-    );
+    const left = make('div', 'hero-content');
+    left.innerHTML = `
+      <div class="hero-live-badge"><span class="pulse-dot"></span> MISSION CONTROL · ВЕЛОМОЩЬ 2.0</div>
+      <h1>Фокус дня <em>· ${todaySession ? 'Сегодня' : 'Ближайший старт'}</em></h1>
+      <p class="hero-copy">Стратегическая цель: <b>FTP ${targetFtp} Вт</b> к <b>${formatDate(targetDate)}</b> (${targetDate}). Разрыв: <b>${gap} Вт</b>. Рабочий FTP: <b>${workingFtp} Вт</b> (${isConfirmed ? 'подтверждён' : 'заявлен'}).</p>
+    `;
 
     const card = make('article', 'next-card today-focus-card');
-    card.append(make('small', '', todaySession ? 'Сегодняшняя сессия' : 'Ближайшая сессия плана'));
+    card.append(make('small', '', todaySession ? '🔴 Сегодняшняя сессия' : '⚡ Ближайшая сессия плана'));
     if (session) {
-      card.append(make('h2', '', session.title || 'Тренировка'));
+      const [tagClass, kind] = sessionKind(session.discipline);
+      const titleRow = make('div', 'hero-session-header');
+      titleRow.innerHTML = `<span class="tag ${tagClass}">${kind}</span> <h2 class="hero-session-title">${session.title || 'Тренировка'}</h2>`;
+      card.append(titleRow);
       card.append(make('div', 'watts', formatDuration(session.duration_min)));
       card.append(make('p', 'session-meta-line', `${formatDate(session.date)} · ${session.goal || ''}`));
       if (session.main_set) {
@@ -666,12 +669,15 @@
 
     // 3. Quick KPI Metrics (Unified athlete profile)
     const metrics = make('div', 'metrics');
-    metrics.append(
-      make('article', 'metric', `FTP ${workingFtp} Вт (${isConfirmed ? 'подтверждён' : 'заявлен'})`),
-      make('article', 'metric', `Разрыв ${gap} Вт (к ${formatDate(targetDate)})`),
-      make('article', 'metric', `Целевой вес ${targetWeight} кг (${targetWkg} Вт/кг)`),
-      make('article', 'metric', manifest.version_number ? `Версия ${manifest.version_number} опубликована` : 'Версия недоступна'),
-    );
+    const metric1 = make('article', 'metric');
+    metric1.innerHTML = `<span class="metric-label">Рабочий FTP</span><b class="metric-val cyan">${workingFtp} Вт</b><small class="metric-sub">${isConfirmed ? '✓ Подтверждён тестом' : '⚡ Заявлен спортсменом'}</small>`;
+    const metric2 = make('article', 'metric');
+    metric2.innerHTML = `<span class="metric-label">Разрыв до цели</span><b class="metric-val amber">+${gap} Вт</b><small class="metric-sub">Цель ${targetFtp} Вт к ${formatDate(targetDate)}</small>`;
+    const metric3 = make('article', 'metric');
+    metric3.innerHTML = `<span class="metric-label">Удельная мощность</span><b class="metric-val lime">${targetWkg} Вт/кг</b><small class="metric-sub">Целевой вес ${targetWeight} кг</small>`;
+    const metric4 = make('article', 'metric');
+    metric4.innerHTML = `<span class="metric-label">План подготовки</span><b class="metric-val emerald">${manifest.version_number ? `Версия ${manifest.version_number}` : 'План загружен'}</b><small class="metric-sub">~${totalWeeks} нед. микроциклов</small>`;
+    metrics.append(metric1, metric2, metric3, metric4);
 
     // 4. Daily Readiness & Safety Insight Card
     const insightCard = make('article', 'card readiness-insight-card');
@@ -956,17 +962,32 @@
 
     const shell = make('header', 'board-shell');
     const brand = make('div', 'brand-row');
-    brand.append(make('div', 'brand', '↗ ВелоМощь'), make('span', 'date-chip', 'Цель FTP 340 · 11 июл 2027'));
+    const brandLeft = make('div', 'brand');
+    brandLeft.innerHTML = `
+      <div class="bolt">⚡</div>
+      <div class="brand-text">
+        <span class="brand-name">ВЕЛОМОЩЬ <span class="brand-badge">PRO</span></span>
+        <span class="brand-sub">FTP 340 · ROAD TO 4.25 W/KG</span>
+      </div>
+    `;
+    const targetDateStr = '2027-07-11';
+    const daysUntilTarget = Math.max(0, Math.ceil((new Date(targetDateStr + 'T12:00:00') - new Date()) / 86400000));
+    const brandRight = make('div', 'brand-meta');
+    brandRight.innerHTML = `
+      <span class="date-chip">🎯 Цель: <b>11 июля 2027</b></span>
+      <span class="countdown-chip">⏳ <b>${daysUntilTarget} дн.</b></span>
+    `;
+    brand.append(brandLeft, brandRight);
     const tabs = make('nav', 'tabbar');
     tabs.setAttribute('aria-label', 'Разделы борда');
 
     // 4 Key Mission Control tabs + guide
     const TAB_DEFS = [
-      ['now', 'СЕГОДНЯ'],
-      ['ftp340', 'FTP 340'],
-      ['plan', 'КАЛЕНДАРЬ'],
-      ['coach', 'AI COACH'],
-      ['guide', 'База знаний'],
+      ['now', '⚡ СЕГОДНЯ'],
+      ['ftp340', '📈 FTP 340'],
+      ['plan', '📅 КАЛЕНДАРЬ'],
+      ['coach', '🤖 AI COACH'],
+      ['guide', '📚 БАЗА ЗНАНИЙ'],
     ];
 
     TAB_DEFS.forEach(([key, label], index) => {
