@@ -1689,7 +1689,7 @@ body { background: #f7f6f2; color: #14232b; }
 .training-session-goal { color: #627178; font-size: 15px; }
 .workout-phases { margin: 22px 0 18px; border-color: #e9eeeb; }
 .workout-phase { padding: 14px 0; border-color: #e9eeeb; font-size: 14px; }
-.workout-phase dt { color: #77888a; }
+.workout-phase dt { color: #53646b; }
 .workout-phase dd { color: #263b43; font-weight: 600; }
 .training-session-actions { gap: 8px 18px; align-items: center; }
 .workout-download { min-height: 46px; padding: 10px 17px; border-radius: 12px; color: #2642ab; background: #eef2ff; border-color: #e0e6ff; }
@@ -1697,7 +1697,7 @@ body { background: #f7f6f2; color: #14232b; }
 .workout-link { color: #3158e8; text-underline-offset: 4px; }
 .training-week-links { margin: 8px 0 16px; }
 .training-week-metrics { gap: 12px; }
-.training-metric { min-height: 126px; padding: 18px 20px; border: 1px solid #e8ebe7; border-radius: 20px; background: #fff; color: #66777d; box-shadow: 0 5px 22px rgba(31,49,57,.035); }
+.training-metric { min-height: 126px; padding: 18px 20px; border: 1px solid #e8ebe7; border-radius: 20px; background: #fff; color: #53646b; box-shadow: 0 5px 22px rgba(31,49,57,.035); }
 .training-metric:first-child { background: #e9f4ef; border-color: #e9f4ef; }
 .training-metric:nth-child(2) { background: #ebefff; border-color: #ebefff; }
 .training-metric:nth-child(3) { background: #fceee4; border-color: #fceee4; }
@@ -1771,3 +1771,17 @@ table.ztab th { background: #edf2f3; color: #53646b; }
 .dt-uncalibrated-notice { background: #f1f5fc; color: #53646b; border-color: #cfdaed; }
 .mmp-item:hover { border-color: #bdcbfa; }
 .cp-item:hover { border-color: #bdcbfa; }
+.ftp-target-visual { grid-column: 1 / -1; padding: 23px 26px 20px; border: 1px solid #e4e9e5; border-radius: 22px; background: #fff; box-shadow: 0 8px 28px rgba(30,48,60,.055); }
+.ftp-target-heading, .ftp-target-details { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
+.ftp-target-labels { display: grid; gap: 2px; }
+.ftp-target-labels span { color: #53646b; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.ftp-target-labels strong { color: #14232b; font-size: 20px; letter-spacing: -.035em; }
+.ftp-target-value { color: #53646b; font-size: 16px; font-weight: 650; white-space: nowrap; }
+.ftp-target-value b { color: #3158e8; font-size: 31px; letter-spacing: -.05em; line-height: 1; }
+.ftp-target-rail { height: 12px; overflow: hidden; margin-top: 18px; border-radius: 99px; background: #e9edf3; }
+.ftp-target-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#3158e8,#71a5ee); }
+.ftp-target-details { margin-top: 9px; color: #53646b; font-size: 11px; font-weight: 650; }
+@media (max-width: 580px) { .ftp-target-visual { padding: 19px 17px; border-radius: 18px; } .ftp-target-labels strong { font-size: 18px; } .ftp-target-value b { font-size: 26px; } }
+@media (max-width: 360px) {
+  .tab { display: flex; align-items: center; justify-content: center; min-height: 44px; overflow-wrap: anywhere; word-break: normal; hyphens: auto; line-height: 1.15; font-size: 9px; }
+}

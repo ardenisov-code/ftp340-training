@@ -483,6 +483,11 @@
     });
   };
 
+  const sessionDisplayTitle = (title, label) => {
+    const clean = (title || '').replace(new RegExp(`^${label}\\s+(?:[·•—–-]\\s*)?`, 'iu'), '').trim();
+    return clean ? clean[0].toLocaleUpperCase('ru-RU') + clean.slice(1) : 'Тренировка';
+  };
+
   const renderWeekAtAGlance = manifest => {
     const today = localMoscowDate();
     const sessions = (manifest.weeks || []).flatMap(week => week.days || []);
@@ -538,7 +543,7 @@
       }
       const heading = make('div', 'training-session-heading');
       const [tag, label] = sessionKind(session.discipline);
-      const title = session.title?.replace(new RegExp(`^${label}\\s+`, 'iu'), '') || 'Тренировка';
+      const title = sessionDisplayTitle(session.title, label);
       heading.append(make('span', `tag ${tag}`, label), make('h2', '', title));
       const duration = formatDuration(session.duration_min);
       if (duration) heading.append(make('span', 'training-duration', duration));
@@ -578,13 +583,35 @@
       return card;
     };
     const exportFtp = getWorkingFtp(manifest);
-    const metricNotice = fromManifest && workingFtp ? 'По опубликованному плану' : isConfirmed ? 'Подтверждён тестом' : 'Заявлен спортсменом';
+    const metricNotice = isConfirmed ? 'Подтверждён тестом' : (!fromManifest || manifest.current_ftp?.status === 'athlete_reported') ? 'Заявлен спортсменом' : 'По опубликованному плану';
     metrics.append(
       metric('Рабочий FTP', workingFtp ? `${workingFtp} Вт` : '—', metricNotice),
       metric('Цель FTP', targetFtp ? `${targetFtp} Вт` : '—', targetDate ? `к ${formatDate(targetDate)} ${parseDate(targetDate).getFullYear()}` : ''),
       metric('Целевой вес', targetWeight ? `${targetWeight} кг` : '—', exportFtp && exportFtp !== workingFtp ? `База экспорта ${exportFtp} Вт` : ''),
     );
 
+    const current = Number(workingFtp);
+    const target = Number(targetFtp);
+    if (Number.isFinite(current) && current > 0 && Number.isFinite(target) && target > 0) {
+      const ratio = Math.round(current / target * 100);
+      const progress = make('section', 'ftp-target-visual');
+      progress.setAttribute('aria-label', `Рабочий FTP ${current} Вт, цель ${target} Вт. Доля от цели ${ratio} процентов. ${metricNotice}.`);
+      const heading = make('div', 'ftp-target-heading');
+      const labels = make('div', 'ftp-target-labels');
+      labels.append(make('span', '', 'ОРИЕНТИР'), make('strong', '', 'Путь к цели'));
+      const value = make('div', 'ftp-target-value');
+      value.append(make('b', '', `${current}`), make('span', '', ` / ${target} Вт`));
+      heading.append(labels, value);
+      const rail = make('div', 'ftp-target-rail');
+      rail.setAttribute('aria-hidden', 'true');
+      const fill = make('span', 'ftp-target-fill');
+      fill.style.width = `${Math.max(0, Math.min(100, ratio))}%`;
+      rail.append(fill);
+      const details = make('div', 'ftp-target-details');
+      details.append(make('span', '', `${metricNotice} · ${ratio}% от цели`), make('span', '', 'Цель 100%'));
+      progress.append(heading, rail, details);
+      metrics.append(progress);
+    }
     return metrics;
   };
 

@@ -10,9 +10,10 @@ class TrackDisplayTests(unittest.TestCase):
     def test_published_track_intervals_and_transition_week(self):
         js = r'''
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
-let source = fs.readFileSync('board.js','utf8').replace("  document.addEventListener('DOMContentLoaded', init);", "  globalThis.uat = {renderSessionPhases, weekPresentation};");
+let source = fs.readFileSync('board.js','utf8').replace("  document.addEventListener('DOMContentLoaded', init);", "  globalThis.uat = {renderSessionPhases, weekPresentation, sessionDisplayTitle, renderProfileMetrics};");
 class Element {
- constructor(tag) { this.tag = tag; this.children = []; this.textContent = ''; }
+ constructor(tag) { this.tag = tag; this.children = []; this.textContent = ''; this.style = {}; }
+ setAttribute(k, v) { this[k] = v; }
  append(...nodes) { this.children.push(...nodes); }
 }
 const ctx = {window: {}, document: {createElement: tag => new Element(tag)}};
@@ -31,6 +32,15 @@ const noTargets = ctx.uat.renderSessionPhases({main_set:'По ощущениям
 assert.doesNotMatch(text(noTargets), /ЧСС/);
 const ordinary = ctx.uat.weekPresentation({block:'Развитие', block_rationale:'Прогрессия', days:[]});
 assert.equal(ordinary.block, 'Развитие');
+assert.equal(ctx.uat.sessionDisplayTitle('Вело · аэробная выносливость', 'ВЕЛО'), 'Аэробная выносливость');
+assert.equal(ctx.uat.sessionDisplayTitle('Велотрек · свитспот 2×20', 'ВЕЛО'), 'Велотрек · свитспот 2×20');
+const metrics = ctx.uat.renderProfileMetrics({current_ftp:{reported_watts:290,status:'athlete_reported'}, profile:{workingFtp:290,targetFtp:340,isConfirmed:false,fromManifest:true}});
+assert.match(text(metrics), /Заявлен спортсменом · 85% от цели/);
+assert.match(text(metrics), /290\s+\/ 340 Вт/);
+const progress = metrics.children.at(-1);
+assert.equal(progress.children[1].children[0].style.width, '85%');
+const noFtp = ctx.uat.renderProfileMetrics({profile:{workingFtp:null,targetFtp:340}});
+assert.equal(noFtp.children.length, 3);
 '''
         subprocess.run(['node', '-e', js], cwd=ROOT, check=True)
 
