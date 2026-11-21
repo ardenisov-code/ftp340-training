@@ -1,25 +1,24 @@
-/* ══════════════════════════════════════════════════════════════════════════════
-   ВЕЛОМОЩЬ 2.0 · HIGH-PERFORMANCE ATHLETIC TELEMETRY COCKPIT (FTP 340)
-   Modern Sports-Tech Dark Mode UI · Glassmorphic / Obsidian Carbon Aesthetic
-   ══════════════════════════════════════════════════════════════════════════════ */
+/* ВелоМощь · тренировочный календарь и аналитика */
 
 :root {
   /* Color Canvas & Surfaces */
-  --bg-canvas: #07090e;
-  --bg-surface: rgba(13, 17, 26, 0.78);
-  --bg-card: rgba(18, 24, 38, 0.82);
-  --bg-card-hover: rgba(26, 34, 52, 0.92);
-  --bg-card-solid: #0e131f;
-  --bg-elevated: rgba(28, 38, 60, 0.85);
+  --bg-canvas: #101419;
+  --bg-surface: #171d24;
+  --bg-card: #1b222b;
+  --bg-card-hover: #242e38;
+  --bg-card-solid: #171d24;
+  --bg-elevated: #242e38;
 
   /* Borders & Hairlines */
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-medium: rgba(255, 255, 255, 0.14);
+  --border-subtle: #303a45;
+  --border-medium: #404c58;
   --border-highlight: rgba(0, 240, 255, 0.35);
 
-  /* Performance Accents */
-  --neon-cyan: #00f0ff;
-  --cyan-soft: #38bdf8;
+  --action: #cbf26c;
+
+  /* Service status accents */
+  --neon-cyan: #cbf26c;
+  --cyan-soft: #cbf26c;
   --racing-emerald: #10b981;
   --emerald-soft: #34d399;
   --hyper-amber: #f59e0b;
@@ -30,32 +29,32 @@
   --purple-soft: #c084fc;
 
   /* Text & Hierarchy */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-primary: #f3f6f8;
+  --text-secondary: #a5b1bf;
+  --text-muted: #9aa7b5;
   --text-dark: #050811;
 
   /* Backward Compatibility Semantic Tokens */
-  --bg: #07090e;
-  --ink: #f8fafc;
-  --fg: #f8fafc;
-  --dim: #94a3b8;
-  --mut: #64748b;
-  --panel: rgba(18, 24, 38, 0.85);
-  --panel-soft: rgba(24, 32, 50, 0.9);
-  --line: rgba(255, 255, 255, 0.08);
+  --bg: #101419;
+  --ink: #f3f6f8;
+  --fg: #f3f6f8;
+  --dim: #a5b1bf;
+  --mut: #9aa7b5;
+  --panel: #1b222b;
+  --panel-soft: #242e38;
+  --line: #303a45;
   --lime: #10b981;
   --lime-deep: #34d399;
-  --cyan: #00f0ff;
-  --acc: #00f0ff;
-  --acc2: #38bdf8;
+  --cyan: #cbf26c;
+  --acc: #cbf26c;
+  --acc2: #cbf26c;
   --ok: #10b981;
   --warn: #f59e0b;
   --bad: #ef4444;
   --danger: #ef4444;
   --safe: #10b981;
-  --card: rgba(18, 24, 38, 0.85);
-  --card2: rgba(24, 32, 50, 0.9);
+  --card: #1b222b;
+  --card2: #242e38;
 
   /* Typography */
   --font-sans: "Inter", "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -78,11 +77,6 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--bg-canvas);
-  background-image:
-    radial-gradient(1100px 550px at 8% -5%, rgba(0, 240, 255, 0.07) 0%, transparent 65%),
-    radial-gradient(900px 500px at 92% -5%, rgba(16, 185, 129, 0.06) 0%, transparent 60%),
-    radial-gradient(950px 700px at 50% 100%, rgba(168, 85, 247, 0.04) 0%, transparent 70%);
-  background-attachment: fixed;
   color: var(--text-primary);
   font: 15px/1.6 var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -112,11 +106,8 @@ body {
   z-index: 50;
   margin: -24px -22px 28px;
   padding: 16px 24px 14px;
-  background: rgba(7, 9, 14, 0.82);
+  background: var(--bg-canvas);
   border-bottom: 1px solid var(--border-subtle);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
 }
 
 .brand-row {
@@ -141,12 +132,10 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--neon-cyan), var(--racing-emerald));
+  background: var(--action);
   color: var(--text-dark);
   font-size: 17px;
   font-weight: 900;
-  box-shadow: 0 0 18px rgba(0, 240, 255, 0.35);
-  transform: skew(-5deg);
   user-select: none;
 }
 
@@ -225,7 +214,7 @@ body {
   margin: 14px auto 0;
   padding: 4px;
   border-radius: 12px;
-  background: rgba(14, 19, 30, 0.6);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
 }
 
@@ -233,7 +222,8 @@ body {
   flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 7px 16px;
+  padding: 8px 13px;
+  min-height: 42px;
   color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
@@ -250,12 +240,16 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.tab[aria-selected="true"] {
-  color: #ffffff;
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.16), rgba(16, 185, 129, 0.12));
-  border-color: rgba(0, 240, 255, 0.4);
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+.tab[aria-current="page"] {
+  color: var(--action);
+  background: #242e24;
+  border-color: #4b5a37;
   font-weight: 800;
+}
+
+:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 3px;
 }
 
 /* ── Tab Panes ────────────────────────────────────────────────────────────── */
@@ -380,13 +374,11 @@ body {
 /* ── Active Plan Banner ───────────────────────────────────────────────────── */
 
 .active-plan-banner {
-  margin: 12px 0 18px;
-  padding: 14px 20px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(14, 22, 36, 0.85), rgba(20, 30, 48, 0.7));
-  border: 1px solid rgba(0, 240, 255, 0.25);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(14px);
+  margin: 16px 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .banner-pill {
@@ -409,160 +401,6 @@ body {
   color: var(--cyan-soft);
   margin-top: 4px;
   font-weight: 600;
-}
-
-/* ── Hero Mission Command Center ──────────────────────────────────────────── */
-
-.hero, .mission-hero {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 24px;
-  padding: 32px;
-  border-radius: 22px;
-  background:
-    radial-gradient(800px 400px at 10% 10%, rgba(0, 240, 255, 0.09) 0%, transparent 65%),
-    radial-gradient(600px 350px at 90% 90%, rgba(16, 185, 129, 0.08) 0%, transparent 60%),
-    linear-gradient(135deg, rgba(16, 22, 34, 0.95) 0%, rgba(10, 14, 22, 0.98) 100%);
-  border: 1px solid var(--border-medium);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 24px 60px rgba(0, 0, 0, 0.45);
-}
-
-.hero-live-badge, .eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
-  color: var(--neon-cyan);
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--neon-cyan);
-  box-shadow: 0 0 8px var(--neon-cyan);
-  animation: radar-pulse 2s infinite;
-}
-
-.hero h1 {
-  margin: 0;
-  color: #ffffff;
-  font-size: clamp(32px, 5vw, 52px);
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-  font-weight: 850;
-}
-
-.hero h1 em {
-  font-style: normal;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 0.85em;
-}
-
-.hero-copy {
-  margin: 16px 0 0;
-  max-width: 58ch;
-  color: var(--text-secondary);
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.hero-copy b {
-  color: var(--text-primary);
-}
-
-/* Today Focus Card (Inside Hero) */
-.next-card, .today-focus-card {
-  align-self: center;
-  position: relative;
-  z-index: 1;
-  padding: 22px;
-  border-radius: 18px;
-  background: rgba(14, 20, 32, 0.8);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  backdrop-filter: blur(16px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 16px 36px rgba(0, 0, 0, 0.35);
-}
-
-.next-card small {
-  display: inline-block;
-  color: var(--amber-soft);
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-  margin-bottom: 8px;
-}
-
-.hero-session-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.hero-session-title, .next-card h2 {
-  margin: 0;
-  border: 0;
-  padding: 0;
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.next-card p {
-  margin: 6px 0 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.watts {
-  color: var(--amber-soft);
-  font-size: 32px;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  font-family: var(--font-mono);
-  margin: 6px 0;
-}
-
-.session-meta-line {
-  color: var(--text-secondary);
-  font-size: 13.5px;
-}
-
-.session-set-preview {
-  margin-top: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border-left: 3px solid var(--neon-cyan);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: var(--font-mono);
-}
-
-/* ── Teleport Buttons (ZWO & FIT Downloads) ─────────────────────────────────── */
-
-.teleport-actions-row, .teleport-btn-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
 }
 
 .btn {
@@ -593,45 +431,6 @@ body {
 
 .btn:active {
   transform: translateY(0);
-}
-
-.btn-action-zwo, .btn-teleport-zwo {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.18), rgba(0, 240, 255, 0.08));
-  border-color: rgba(0, 240, 255, 0.45);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(0, 240, 255, 0.15);
-}
-
-.btn-action-zwo:hover, .btn-teleport-zwo:hover {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(0, 240, 255, 0.15));
-  border-color: var(--neon-cyan);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
-  color: #ffffff;
-}
-
-.btn-action-fit, .btn-teleport-fit {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.08));
-  border-color: rgba(16, 185, 129, 0.45);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15);
-}
-
-.btn-action-fit:hover, .btn-teleport-fit:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0.15));
-  border-color: var(--racing-emerald);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
-  color: #ffffff;
-}
-
-.btn-action-help {
-  border-color: var(--border-subtle);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-secondary);
-}
-
-.btn-action-help:hover {
-  color: var(--text-primary);
-  border-color: var(--border-medium);
 }
 
 /* ── KPI Metric Cards ─────────────────────────────────────────────────────── */
@@ -1027,34 +826,6 @@ details.week > summary .wh {
   border-radius: 6px;
 }
 
-/* ── SVG Workout Interval Visualizer ──────────────────────────────────────── */
-
-.workout-viz-container {
-  margin: 10px 0 8px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border-subtle);
-}
-
-.workout-viz-svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 44px;
-  overflow: visible;
-}
-
-.workout-viz-svg rect {
-  cursor: pointer;
-  transition: opacity 0.15s ease, filter 0.15s ease;
-}
-
-.workout-viz-svg rect:hover {
-  opacity: 0.9;
-  filter: brightness(1.2);
-}
-
 /* ── Upcoming 3 Bike Workouts Panel ────────────────────────────────────────── */
 
 .next-bike-export-panel {
@@ -1295,7 +1066,7 @@ details.week > summary .wh {
 
 .badge-status.upcoming {
   background: rgba(100, 116, 139, 0.2);
-  color: #94a3b8;
+  color: #a5b1bf;
   border: 1px solid rgba(100, 116, 139, 0.3);
 }
 
@@ -1322,7 +1093,7 @@ details.week > summary .wh {
 }
 
 .cp-item:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: #404c58;
 }
 
 .cp-item b {
@@ -1453,123 +1224,6 @@ table.ztab td.calc-power {
   font-family: var(--font-mono);
 }
 
-/* ── Modal Dialog (MyWhoosh Guide) ─────────────────────────────────────────── */
-
-.mission-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(4, 7, 13, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.mission-modal-card {
-  width: 100%;
-  max-width: 600px;
-  border-radius: 20px;
-  background: #0d121c;
-  border: 1px solid var(--border-medium);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 24px 70px rgba(0, 0, 0, 0.6);
-  padding: 28px;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes modalScaleUp {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-.mission-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding-bottom: 14px;
-}
-
-.mission-modal-header h3 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 800;
-  color: #ffffff;
-}
-
-.mission-modal-close {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.mission-modal-close:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-}
-
-.modal-steps {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.modal-steps li {
-  margin-bottom: 10px;
-}
-
-.modal-steps b {
-  color: var(--text-primary);
-}
-
-.modal-steps code {
-  background: rgba(0, 240, 255, 0.1);
-  color: var(--neon-cyan);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-.modal-hint {
-  margin-top: 18px;
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.modal-hint b {
-  color: var(--amber-soft);
-}
-
 /* ── Tabular Numerics Helper ──────────────────────────────────────────────── */
 
 .fact-metric, .watts, .mmp-w, .pmc-stat b, .dt-milestone-card b, .metric b, .metric-val {
@@ -1581,10 +1235,6 @@ table.ztab td.calc-power {
 /* ── Responsive Viewports ─────────────────────────────────────────────────── */
 
 @media (max-width: 860px) {
-  .hero {
-    grid-template-columns: 1fr;
-    padding: 24px;
-  }
   .metrics {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1615,10 +1265,363 @@ table.ztab td.calc-power {
     flex-direction: column;
     align-items: stretch;
   }
-  .next-bike-export-row .teleport-btn-row {
-    margin-top: 6px;
+}
+
+/* Обзор недели и действия с опубликованной тренировкой */
+
+.training-week-heading {
+  margin-bottom: 18px;
+}
+
+.training-week-heading h1 {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 48px);
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+}
+
+.training-week-heading p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+}
+
+.training-week-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.training-week-day {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-height: 74px;
+  padding: 7px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: 600 12px/1.35 var(--font-sans);
+  cursor: pointer;
+}
+
+.training-week-day:hover {
+  background: var(--bg-card-hover);
+}
+
+.training-week-day[aria-pressed="true"] {
+  background: #242e24;
+  border-color: var(--action);
+  color: var(--action);
+}
+
+.training-day-date {
+  color: var(--text-primary);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+}
+
+.training-week-day[aria-pressed="true"] .training-day-date {
+  color: var(--action);
+}
+
+.training-day-discipline {
+  font-size: 11px;
+}
+
+.training-day-card {
+  min-width: 0;
+  padding: clamp(14px, 3vw, 26px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+
+.training-selected-date {
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.training-session-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.training-day-card h2 {
+  flex: 1 1 230px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text-primary);
+  font-size: clamp(20px, 3vw, 29px);
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.training-duration {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.training-session-goal {
+  margin: 7px 0 0;
+  color: var(--text-secondary);
+}
+
+.workout-phases {
+  display: grid;
+  gap: 0;
+  margin: 16px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.workout-phase {
+  display: grid;
+  grid-template-columns: minmax(100px, 155px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px;
+}
+
+.workout-phase dt {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.workout-phase dd {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.training-session-actions, .workout-import-actions {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin-top: 12px;
+}
+
+.workout-download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workout-download {
+  min-height: 44px;
+  margin: 0;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.workout-download-zwo,
+.workout-download-zwo:hover {
+  background: var(--action);
+  border-color: var(--action);
+  color: #171f13;
+}
+
+.workout-download:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.workout-download-status {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.workout-download-status:empty {
+  display: none;
+}
+
+.workout-download-status.export-error {
+  color: #ffb6b2;
+}
+
+.workout-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action);
+  font: 650 13px/1.45 var(--font-sans);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.training-week-links {
+  margin: 2px 0 10px;
+}
+
+.training-week-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.training-metric {
+  display: grid;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.training-metric strong {
+  color: var(--text-primary);
+  font-size: clamp(16px, 3vw, 22px);
+  font-variant-numeric: tabular-nums;
+}
+
+.training-metric small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.training-service-status summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.training-service-status .mission-status-bar {
+  margin: 12px 0 0;
+}
+
+.workout-import-dialog {
+  width: min(calc(100% - 28px), 520px);
+  max-height: min(85vh, 520px);
+  padding: 22px;
+  border: 1px solid var(--border-medium);
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.workout-import-dialog::backdrop {
+  background: #0a0d12c9;
+}
+
+.workout-import-dialog h2 {
+  margin: 0 40px 14px 0;
+  padding: 0;
+  border: 0;
+  line-height: 1.2;
+}
+
+.workout-import-dialog li {
+  margin-bottom: 9px;
+}
+
+.workout-import-dialog ol {
+  padding-left: 22px;
+}
+
+.workout-import-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+#next-bike-exports {
+  scroll-margin-top: 30px;
+}
+
+@media (max-width: 580px) {
+  .tabbar {
+    gap: 2px;
+    margin-top: 8px;
   }
-  .hero h1 {
-    font-size: 32px;
+
+  .tab {
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .training-week-heading {
+    margin-bottom: 12px;
+  }
+
+  .training-week-days {
+    gap: 4px;
+  }
+
+  .training-week-day {
+    min-height: 66px;
+    border-radius: 7px;
+    font-size: 11px;
+  }
+
+  .training-day-date {
+    font-size: 18px;
+  }
+
+  .training-day-discipline {
+    font-size: 9px;
+  }
+
+  .training-session-heading {
+    column-gap: 8px;
+  }
+
+  .training-session-heading h2 {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  .workout-phase {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    font-size: 13px;
+  }
+
+  .training-metric {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .next-bike-export-panel {
+    padding: 14px;
+  }
+
+  .next-bike-export-row {
+    padding: 10px;
+    gap: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .pane, .status-dot {
+    animation: none;
   }
 }

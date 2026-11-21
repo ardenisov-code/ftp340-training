@@ -36,9 +36,10 @@ class PublicBoardContractTests(unittest.TestCase):
         self.assertIn("todayButton.dataset.action = 'open-today'", script)
         self.assertIn("expandButton.dataset.action = 'expand-weeks'", script)
         self.assertIn("collapseButton.dataset.action = 'collapse-weeks'", script)
-        self.assertIn("session.warmup", script)
-        self.assertIn("session.main_set", script)
-        self.assertIn("session.cooldown", script)
+        self.assertIn("renderSessionPhases(session)", script)
+        self.assertIn("['warmup', 'Разминка']", script)
+        self.assertIn("['main_set', 'Основная часть']", script)
+        self.assertIn("['cooldown', 'Заминка']", script)
         self.assertIn("source_reference_ftp_watts", script)
         self.assertIn("wrap.querySelectorAll(':scope > nav a[href^=\"#\"]')", script)
         self.assertIn("@media", css)
@@ -100,6 +101,16 @@ class PublicBoardContractTests(unittest.TestCase):
         self.assertIn("/api/workouts/${session.date}.${format}", script)
         self.assertIn("getWorkingFtp(manifest)", script)
         self.assertNotIn("const xml = generateZwoXml(session, ftp)", script)
+
+    def test_public_schedule_does_not_merge_live_or_private_training_data(self):
+        script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
+        self.assertNotIn("/api/plan/live-status", script)
+        self.assertNotIn("date_overrides", script)
+        self.assertNotIn("actual_np", script)
+        self.assertNotIn("renderWorkoutVisualizer", script)
+        self.assertIn("const byDate = new Map(sessions.map(session => [session.date, session]))", script)
+        self.assertIn("session.source_reference_ftp_watts", script)
+        self.assertIn("const exportFtp = getWorkingFtp(manifest);", script)
 
     def test_board_surfaces_exports_for_next_three_uncompleted_bike_sessions(self):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")

@@ -19,8 +19,8 @@
 
   const getWorkingFtp = manifest => {
     const current = manifest?.current_ftp;
-    const watts = Number(current?.confirmed_watts ?? current?.reported_watts);
-    return Number.isInteger(watts) && watts >= 100 && watts <= 600 ? watts : 280;
+    const watts = Number(current?.reported_watts ?? current?.confirmed_watts);
+    return Number.isInteger(watts) && watts >= 100 && watts <= 600 ? watts : null;
   };
 
   const localMoscowDate = () => {
@@ -48,37 +48,7 @@
     const total = Math.round(Number(minutes));
     const hours = Math.floor(total / 60);
     const rest = total % 60;
-    return hours ? `${hours}:${String(rest).padStart(2, '0')}` : `${rest} мин`;
-  };
-
-  // Recalculate watt prescriptions dynamically if targetFtp is provided.
-  const sessionWattText = (text, targetFtp) => {
-    const src = String(text || '');
-    if (!targetFtp || typeof targetFtp !== 'number' || targetFtp <= 0) return src;
-
-    // Pattern 1: Range percentage: "168–190 Вт (60–68% от 280 Вт)" or "168–190 Вт (60–68%)"
-    let res = src.replace(/(\d+)[–-](\d+)\s*Вт\s*\(([0-9.]+)[–-]([0-9.]+)%(?:\s*от\s*\d+\s*Вт)?\)/g, (_, _w1, _w2, p1, p2) => {
-      const nw1 = Math.round(targetFtp * Number(p1) / 100);
-      const nw2 = Math.round(targetFtp * Number(p2) / 100);
-      return `${nw1}–${nw2} Вт (${p1}–${p2}% от ${targetFtp} Вт)`;
-    });
-
-    // Pattern 2: Single percentage in brackets: "350 Вт [125% от 280 Вт]" or "140 Вт [50% от 280 Вт]"
-    res = res.replace(/(\d+)\s*Вт\s*\[([0-9.]+)%(?:\s*от\s*\d+\s*Вт)?\]/g, (_, _w, p) => {
-      const nw = Math.round(targetFtp * Number(p) / 100);
-      return `${nw} Вт [${p}% от ${targetFtp} Вт]`;
-    });
-
-    // Pattern 3: Single percentage in parentheses: "364 Вт (130% от 280 Вт)"
-    res = res.replace(/(\d+)\s*Вт\s*\(([0-9.]+)%(?:\s*от\s*\d+\s*Вт)?\)/g, (_, _w, p) => {
-      const nw = Math.round(targetFtp * Number(p) / 100);
-      return `${nw} Вт (${p}% от ${targetFtp} Вт)`;
-    });
-
-    // Pattern 4: Standalone "от \d+ Вт"
-    res = res.replace(/от\s+\d+\s+Вт/g, `от ${targetFtp} Вт`);
-
-    return res;
+    return hours ? `${hours} ч${rest ? ` ${rest} мин` : ''}` : `${rest} мин`;
   };
 
   const make = (tag, className, text) => {
@@ -93,80 +63,119 @@
     rest: ['k-rest', 'ОТДЫХ'], recovery: ['k-rec', 'ВОССТ.'],
   }[discipline] || ['k-rec', 'ТРЕНИРОВКА']);
 
-  // ── Workout Teleport: Canonical Server-Side ZWO & FIT Exporter ───────────────
-
+  const SERVICE = 'https://tricoach-garmin.onrender.com';
+  const timeoutOptions = milliseconds => typeof AbortSignal.timeout === 'function'
+    ? {signal: AbortSignal.timeout(milliseconds)}
+    : {};
+  const MYWHOOSH_BUILDER = 'https://workout.mywhoosh.com/';
+  const MYWHOOSH_GUIDE = 'https://www.mywhoosh.com/everything-you-need-to-know-about-the-new-mywhoosh-workout-builder/';
   let calendarVersion;
-  const exportWorkout = async (session, ftp, format) => {
-    const endpoint = new URL(`https://tricoach-garmin.onrender.com/api/workouts/${session.date}.${format}`);
+
+  const exportWorkout = async (session, ftp, format, button, status) => {
+    const endpoint = new URL(`${SERVICE}/api/workouts/${session.date}.${format}`);
     endpoint.searchParams.set('ftp', ftp);
     if (calendarVersion) endpoint.searchParams.set('version', calendarVersion);
+    button.disabled = true;
+    status.textContent = `Готовлю ${format.toUpperCase()}…`;
+    status.classList.remove('export-error');
     try {
-      const response = await fetch(endpoint);
+      const response = await fetch(endpoint, timeoutOptions(20000));
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(typeof error.detail === 'string' ? error.detail : 'Сервис экспорта временно недоступен.');
+        const message = response.status === 422
+          ? error.detail || 'Для этого занятия в плане недостаточно точных интервалов.'
+          : 'Экспорт временно недоступен. Попробуй ещё раз.';
+        throw new Error(message);
       }
       const file = URL.createObjectURL(await response.blob());
-      const link = document.createElement('a');
+      const link = make('a');
       link.href = file;
       link.download = `TriCoach_${session.date}.${format}`;
-      document.body.appendChild(link);
+      document.body.append(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(file), 30000);
+      status.textContent = `Скачивание ${format.toUpperCase()} началось.`;
     } catch (err) {
-      alert(`Не удалось скачать ${format.toUpperCase()}. ${err.message}`);
+      status.classList.add('export-error');
+      status.textContent = err.name === 'TimeoutError' || err instanceof TypeError
+        ? 'Сервис экспорта не ответил. Попробуй ещё раз.'
+        : `Не удалось скачать ${format.toUpperCase()}. ${err.message}`;
+    } finally {
+      button.disabled = false;
     }
   };
 
-  const exportZwoFile = (session, ftp = 280) => exportWorkout(session, ftp, 'zwo');
-  const exportFitFile = (session, ftp = 280) => exportWorkout(session, ftp, 'fit');
+  const renderExportActions = (session, ftp) => {
+    const sessionReference = Number(session.source_reference_ftp_watts);
+    const exportFtp = Number.isInteger(sessionReference) && sessionReference >= 100 && sessionReference <= 600 ? sessionReference : ftp;
+    const group = make('div', 'workout-downloads');
+    const row = make('div', 'workout-download-actions');
+    const status = make('p', 'workout-download-status');
+    status.setAttribute('role', 'status');
+    for (const [format, label] of [['zwo', 'ZWO · MyWhoosh'], ['fit', 'FIT · Garmin']]) {
+      const button = make('button', `btn workout-download workout-download-${format}`, label);
+      button.type = 'button';
+      button.disabled = !calendarVersion || !exportFtp;
+      button.onclick = () => exportWorkout(session, exportFtp, format, button, status);
+      row.append(button);
+    }
+    if (!calendarVersion || !exportFtp) status.textContent = 'Экспорт для этой версии недоступен.';
+    group.append(row, status);
+    return group;
+  };
 
   const showMyWhooshGuideModal = () => {
     const existing = document.getElementById('mywhoosh-guide-modal');
-    if (existing) { existing.style.display = 'flex'; return; }
+    if (existing) { existing.showModal(); return; }
 
-    const overlay = make('div', 'mission-modal-overlay');
-    overlay.id = 'mywhoosh-guide-modal';
-    const card = make('div', 'mission-modal-card');
-    const header = make('div', 'mission-modal-header');
-    header.append(make('h3', '', '🚴 Импорт тренировки в MyWhoosh'), (() => {
-      const btn = make('button', 'mission-modal-close', '✕');
-      btn.type = 'button';
-      btn.onclick = () => { overlay.style.display = 'none'; };
-      return btn;
-    })());
+    const dialog = make('dialog', 'workout-import-dialog');
+    dialog.id = 'mywhoosh-guide-modal';
+    dialog.setAttribute('aria-labelledby', 'mywhoosh-guide-title');
+    const title = make('h2', '', 'Импорт в MyWhoosh');
+    title.id = 'mywhoosh-guide-title';
+    const close = make('button', 'workout-import-close', '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Закрыть инструкцию');
+    close.onclick = () => dialog.close();
+    const steps = make('ol');
+    [
+      'Скачай ZWO. На телефоне найди его в приложении «Файлы», в папке «Загрузки» (Downloads).',
+      'Открой Workout Builder и войди в свой аккаунт MyWhoosh.',
+      'Нажми Import и выбери скачанный файл. Затем нажми Export to MyWhoosh.',
+      'Открой MyWhoosh → Workout → MyWorkout. Повтори импорт для остальных файлов.',
+    ].forEach(step => steps.append(make('li', '', step)));
+    const open = make('a', 'btn workout-download workout-download-zwo', 'Открыть Workout Builder');
+    open.href = MYWHOOSH_BUILDER;
+    open.target = '_blank';
+    open.rel = 'noopener';
+    const guide = make('a', 'workout-link', 'Инструкция MyWhoosh');
+    guide.href = MYWHOOSH_GUIDE;
+    guide.target = '_blank';
+    guide.rel = 'noopener';
+    const nav = make('div', 'workout-import-actions');
+    nav.append(open, guide);
+    dialog.append(title, close, steps, nav);
+    dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+    document.body.append(dialog);
+    dialog.showModal();
+  };
 
-    const body = make('div', 'mission-modal-body');
-    body.innerHTML = `
-      <ol class="modal-steps">
-        <li><b>Скачай ZWO:</b> Нажми <i>«ZWO · MyWhoosh»</i> у нужной велотренировки. На телефоне файл будет в «Загрузках» (iPhone: приложение «Файлы» → Downloads; Android: «Файлы» → Downloads).</li>
-        <li><b>Открой Workout Builder:</b> В том же браузере перейди на официальный сайт <a href="https://workout.mywhoosh.com/" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:underline;">workout.mywhoosh.com</a>.</li>
-        <li><b>Авторизуйся:</b> Войди под своим аккаунтом MyWhoosh.</li>
-        <li><b>Импортируй файл:</b> Нажми <b>Import</b> и выбери этот <code>.zwo</code> в папке Downloads. Повтори для каждого файла.</li>
-        <li><b>Отправь в аккаунт:</b> Нажми <b>Export to MyWhoosh</b>. Тренировка появится в приложении в разделе <i>My Workouts</i>.</li>
-      </ol>
-      <div class="modal-hint">
-        📱 <b>Важно:</b> скачивание файла ещё не добавляет его в MyWhoosh — нужен шаг Import и Export to MyWhoosh на сайте. <br>💡 <b>Для Zwift:</b> скопируй скачанный <code>.zwo</code> в папку <code>Документы/Zwift/Workouts/&lt;UserId&gt;/</code> на компьютере.
-      </div>
-    `;
-    card.append(header, body);
-    overlay.append(card);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
-    document.body.append(overlay);
+  const renderMyWhooshHelp = () => {
+    const guide = make('button', 'workout-link', 'Как импортировать ZWO в MyWhoosh с телефона');
+    guide.type = 'button';
+    guide.onclick = showMyWhooshGuideModal;
+    return guide;
   };
 
   // ── Calculator & ZTab ────────────────────────────────────────────────────────
 
-  let activeManifest = null;
-
   const renderCalculator = manifest => {
-    activeManifest = manifest;
     const input = document.getElementById('ftp-reference');
     const body = document.querySelector('.ztab tbody');
     if (!input || !body) return;
     const stored = Number(localStorage.getItem('ftp340_public_calc') || 0);
-    const source = getWorkingFtp(manifest);
+    const source = manifest.profile?.workingFtp ?? getWorkingFtp(manifest);
     const initial = Number.isInteger(stored) && stored >= 100 && stored <= 600 ? stored : source;
     input.value = initial || '';
     input.placeholder = source ? String(source) : 'FTP';
@@ -184,10 +193,6 @@
         );
         body.append(row);
       });
-      // Dynamically re-render calendar workouts with active FTP
-      if (activeManifest && activeManifest.weeks) {
-        renderPlan(activeManifest, value);
-      }
     };
     input.addEventListener('input', () => {
       const value = Number(input.value);
@@ -207,103 +212,15 @@
     draw(initial);
   };
 
-  // ── Pure Vanilla SVG Workout Interval Visualizer ────────────────────────────
-
-  const renderWorkoutVisualizer = (session, ftp) => {
-    if (session.discipline !== 'bike') return null;
-    const dur = Number(session.duration_min) || 60;
-    const workingFtp = ftp || 280;
-
-    const intervals = [];
-    const warmupDur = session.warmup ? (parseInt(session.warmup, 10) || 15) : 12;
-    intervals.push({ label: 'Разминка Z1/Z2', duration: warmupDur, pct: 62, zone: 'z2' });
-
-    const mainText = (session.main_set || '').toLowerCase();
-    const remainDur = Math.max(dur - warmupDur - 8, 20);
-
-    if (mainText.includes('30/15') || mainText.includes('vo₂') || mainText.includes('vo2')) {
-      const sets = mainText.includes('3×') ? 3 : 2;
-      const setDur = Math.floor(remainDur / sets);
-      for (let s = 0; s < sets; s++) {
-        intervals.push({ label: 'Серия 30/15 @ 125%', duration: Math.floor(setDur * 0.7), pct: 125, zone: 'z6' });
-        if (s < sets - 1) {
-          intervals.push({ label: 'Отдых Z1', duration: Math.floor(setDur * 0.3), pct: 50, zone: 'z1' });
-        }
-      }
-    } else if (mainText.includes('порог') || mainText.includes('threshold') || mainText.includes('sweet spot') || mainText.includes('t20') || mainText.includes('t5')) {
-      const reps = mainText.includes('4×') ? 4 : (mainText.includes('3×') ? 3 : 2);
-      const repDur = Math.floor(remainDur / (reps * 1.35));
-      const restDur = Math.floor(repDur * 0.35);
-      for (let r = 0; r < reps; r++) {
-        intervals.push({ label: 'Порог Z4 @ 95–100%', duration: repDur, pct: 98, zone: 'z4' });
-        if (r < reps - 1) intervals.push({ label: 'Отдых Z1', duration: restDur, pct: 50, zone: 'z1' });
-      }
-    } else if (mainText.includes('темп') || mainText.includes('tempo')) {
-      intervals.push({ label: 'Темп Z3 @ 80–88%', duration: remainDur, pct: 85, zone: 'z3' });
-    } else {
-      intervals.push({ label: 'База Z2 @ 65–72%', duration: remainDur, pct: 68, zone: 'z2' });
+  const renderSessionPhases = session => {
+    const phases = make('dl', 'workout-phases');
+    for (const [key, label] of [['warmup', 'Разминка'], ['main_set', 'Основная часть'], ['cooldown', 'Заминка']]) {
+      if (!session[key]) continue;
+      const row = make('div', 'workout-phase');
+      row.append(make('dt', '', label), make('dd', '', session[key]));
+      phases.append(row);
     }
-
-    const cooldownDur = Math.max(dur - intervals.reduce((acc, i) => acc + i.duration, 0), 5);
-    intervals.push({ label: 'Заминка Z1', duration: cooldownDur, pct: 50, zone: 'z1' });
-
-    const svgWidth = 360;
-    const svgHeight = 38;
-    const totalMin = intervals.reduce((acc, i) => acc + i.duration, 0);
-    const zoneColors = {
-      z1: '#64748B',
-      z2: '#10B981',
-      z3: '#06B6D4',
-      z4: '#F59E0B',
-      z5: '#EF4444',
-      z6: '#A855F7',
-    };
-
-    const container = make('div', 'workout-viz-container');
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
-    svg.setAttribute('class', 'workout-viz-svg');
-    svg.setAttribute('role', 'img');
-
-    const lineY = Math.round(svgHeight - (100 / 140) * (svgHeight - 6));
-    const ftpLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    ftpLine.setAttribute('x1', '0');
-    ftpLine.setAttribute('x2', String(svgWidth));
-    ftpLine.setAttribute('y1', String(lineY));
-    ftpLine.setAttribute('y2', String(lineY));
-    ftpLine.setAttribute('stroke', 'rgba(245, 158, 11, 0.75)');
-    ftpLine.setAttribute('stroke-dasharray', '4,3');
-    ftpLine.setAttribute('stroke-width', '1.2');
-    const ftpTitle = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    ftpTitle.textContent = `100% FTP (${workingFtp} Вт)`;
-    ftpLine.append(ftpTitle);
-
-    let currentX = 0;
-    intervals.forEach(inv => {
-      const blockWidth = Math.max((inv.duration / totalMin) * svgWidth, 2);
-      const blockHeight = Math.min(Math.round((inv.pct / 140) * (svgHeight - 6)), svgHeight - 4);
-      const rectY = svgHeight - blockHeight;
-
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', currentX.toFixed(1));
-      rect.setAttribute('y', String(rectY));
-      rect.setAttribute('width', Math.max(blockWidth - 1, 1).toFixed(1));
-      rect.setAttribute('height', String(blockHeight));
-      rect.setAttribute('rx', '2');
-      rect.setAttribute('fill', zoneColors[inv.zone] || '#06B6D4');
-
-      const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-      const w = Math.round(workingFtp * (inv.pct / 100));
-      titleEl.textContent = `${inv.label}: ~${w} Вт (${inv.pct}%) · ${inv.duration} мин`;
-      rect.appendChild(titleEl);
-
-      svg.appendChild(rect);
-      currentX += blockWidth;
-    });
-
-    svg.appendChild(ftpLine);
-    container.append(svg);
-    return container;
+    return phases;
   };
 
   // ── Calendar Week & Day Rendering ───────────────────────────────────────────
@@ -334,58 +251,14 @@
       const title = make('h4');
       title.append(make('span', `tag ${tagClass}`, kind), document.createTextNode(` ${session.title || 'Тренировка'}`));
       content.append(title);
-      if (session.completed) {
-        const factBox = make('div', 'session-fact-box');
-        factBox.append(make('span', 'tag done', '✓ Выполнено по факту'));
-        const metricsRow = make('div', 'fact-metrics-grid');
-        const dur = session.actual_duration_min || session.duration_min;
-        const durDelta = (session.actual_duration_min && session.duration_min && session.actual_duration_min !== session.duration_min)
-          ? (session.actual_duration_min - session.duration_min) : null;
-        const np = session.actual_np || session.normalized_power_watts;
-        const avgP = session.actual_avg_power || session.average_power_watts;
-        const ifVal = np && ftp ? (np / ftp).toFixed(2) : null;
-        if (dur) {
-          const deltaStr = durDelta !== null ? ` (${durDelta > 0 ? '+' : ''}${durDelta}м)` : '';
-          metricsRow.append(make('span', 'fact-metric', `⏱️ ${dur} мин${deltaStr}`));
-        }
-        if (np) metricsRow.append(make('span', 'fact-metric', `⚡ NP ${np} Вт`));
-        else if (avgP) metricsRow.append(make('span', 'fact-metric', `⚡ Ср ${avgP} Вт`));
-        if (ifVal) metricsRow.append(make('span', 'fact-metric', `🎯 IF ${ifVal}`));
-        factBox.append(metricsRow);
-        content.append(factBox);
-      }
+      if (session.completed) content.append(make('span', 'tag done', 'Отмечено в плане'));
       if (session.duration_min) content.append(make('p', 'session-duration', formatDuration(session.duration_min)));
       if (session.goal) content.append(make('p', 'goal', session.goal));
-      if (session.warmup) content.append(make('p', 'session-warmup', sessionWattText(session.warmup, ftp)));
-      if (session.main_set) content.append(make('p', 'session-main-set', sessionWattText(session.main_set, ftp)));
-      if (session.cooldown) content.append(make('p', 'session-cooldown', sessionWattText(session.cooldown, ftp)));
+      const phases = renderSessionPhases(session);
+      if (phases.childElementCount) content.append(phases);
       if (session.cadence) content.append(make('p', 'session-cadence', session.cadence));
-      if (session.key_numbers) content.append(make('p', 'session-key-numbers', sessionWattText(session.key_numbers, ftp)));
-      if (session.discipline === 'bike') {
-        const viz = renderWorkoutVisualizer(session, ftp);
-        if (viz) content.append(viz);
-      }
-      const referenceFtp = Number(session.source_reference_ftp_watts || 0);
-      if (referenceFtp && ftp && referenceFtp !== ftp) {
-        content.append(make('p', 'session-ftp-warning', `Исходные проценты этого блока рассчитаны при FTP ${referenceFtp} Вт; текущий рабочий FTP — ${ftp} Вт. Экспорт сохраняет явно заданные в плане ватты, а проценты без ватт считает от текущего FTP.`));
-      }
-
-      // Feature 01: Teleport export buttons for bike sessions
-      if (session.discipline === 'bike') {
-        const btnRow = make('div', 'teleport-btn-row');
-        const zwoBtn = make('button', 'btn btn-teleport-zwo', '🚴 ZWO');
-        zwoBtn.type = 'button';
-        zwoBtn.title = 'Скачать .ZWO для MyWhoosh и Zwift';
-        zwoBtn.onclick = () => exportZwoFile(session, ftp || 280);
-
-        const fitBtn = make('button', 'btn btn-teleport-fit', '⌚ FIT');
-        fitBtn.type = 'button';
-        fitBtn.title = 'Скачать .FIT для Garmin';
-        fitBtn.onclick = () => exportFitFile(session, ftp || 280);
-
-        btnRow.append(zwoBtn, fitBtn);
-        content.append(btnRow);
-      }
+      if (session.key_numbers) content.append(make('p', 'session-key-numbers', session.key_numbers));
+      if (session.discipline === 'bike') content.append(renderExportActions(session, ftp));
 
       day.append(dateLabel, content);
       details.append(day);
@@ -400,9 +273,10 @@
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(0, 3);
     const panel = make('section', 'card next-bike-export-panel');
+    panel.id = 'next-bike-exports';
     panel.append(
-      make('h3', '', '🚴 Ближайшие 3 велотренировки'),
-      make('p', 'next-bike-export-copy', 'Скачай ZWO для MyWhoosh или FIT для Garmin. В MyWhoosh файл нужно один раз импортировать через веб-конструктор.'),
+      make('h3', '', 'Ближайшие 3 велотренировки'),
+      make('p', 'next-bike-export-copy', 'Тренировки из опубликованного календаря. Каждый ZWO загружается в MyWhoosh отдельно.'),
     );
     if (!sessions.length) {
       panel.append(make('p', 'next-bike-export-empty', 'В календаре нет будущих велотренировок для экспорта.'));
@@ -415,27 +289,16 @@
           make('strong', '', `${formatDate(session.date)} · ${session.title || 'Велотренировка'}`),
           make('span', '', `${formatDuration(session.duration_min)}${session.goal ? ` · ${session.goal}` : ''}`),
         );
-        const actions = make('div', 'teleport-btn-row');
-        const zwo = make('button', 'btn btn-teleport-zwo', 'ZWO · MyWhoosh');
-        zwo.type = 'button';
-        zwo.onclick = () => exportZwoFile(session, ftp);
-        const fit = make('button', 'btn btn-teleport-fit', 'FIT · Garmin');
-        fit.type = 'button';
-        fit.onclick = () => exportFitFile(session, ftp);
-        actions.append(zwo, fit);
-        row.append(details, actions);
+        row.append(details, renderExportActions(session, ftp));
         list.append(row);
       });
       panel.append(list);
-      const guide = make('button', 'btn btn-action-help', 'Как импортировать ZWO в MyWhoosh с телефона');
-      guide.type = 'button';
-      guide.onclick = showMyWhooshGuideModal;
-      panel.append(guide);
+      panel.append(renderMyWhooshHelp());
     }
     mount.append(panel);
   };
 
-  const renderPlan = (manifest, customFtp) => {
+  const renderPlan = manifest => {
     const mount = document.getElementById('approved-plan-calendar');
     if (!mount) return;
     mount.replaceChildren();
@@ -443,12 +306,10 @@
       mount.append(make('div', 'card plan-loading', 'Утверждённая версия программы ещё не синхронизирована из TriCoach.'));
       return;
     }
-    const baseFtp = getWorkingFtp(manifest);
-    const ftp = Number.isInteger(customFtp) && customFtp >= 100 && customFtp <= 600 ? customFtp : baseFtp;
+    const ftp = getWorkingFtp(manifest);
     const tools = make('div', 'plan-tools');
     const intro = make('div');
-    const calcNotice = ftp !== baseFtp ? ` · калькулятор: ${ftp} Вт (базовый ${baseFtp} Вт)` : '';
-    intro.append(make('h2', '', 'План по неделям'), make('p', '', `Версия ${manifest.version_number} · обновлено ${manifest.updated_at || '—'}${calcNotice}`));
+    intro.append(make('h2', '', 'План по неделям'), make('p', '', `Версия ${manifest.version_number} · база экспорта ${ftp ? `${ftp} Вт` : 'не указана'}`));
     const select = make('select');
     select.setAttribute('aria-label', 'Выберите неделю');
     const openButton = make('button', 'btn', 'Открыть неделю');
@@ -514,72 +375,187 @@
     });
   };
 
-  // ── Mission Control Section 1: СЕГОДНЯ ───────────────────────────────────────
+  const SERVICE_LABELS = {
+    garmin: 'Garmin', openai: 'Omni', render_api: 'Сервис', telegram: 'Telegram',
+    pages: 'Сайт', database: 'Хранилище',
+  };
+  let missionStatus;
+  const loadMissionStatus = () => {
+    missionStatus ||= fetch(`${SERVICE}/api/mission-control/status`, {cache: 'no-store', ...timeoutOptions(5000)})
+      .then(response => response.ok ? response.json() : null)
+      .catch(() => null);
+    return missionStatus;
+  };
+
+  const profileFor = (manifest, live) => {
+    const positiveNumber = (number, fallback) => Number.isFinite(number) && number > 0 ? number : fallback;
+    const target = live?.target_date && /^\d{4}-\d{2}-\d{2}$/.test(live.target_date) ? live.target_date : manifest.target?.date;
+    const liveFtp = positiveNumber(live?.current_reported_ftp, null);
+    const publishedFtp = getWorkingFtp(manifest);
+    const confirmedFtp = liveFtp ? live.confirmed_ftp_watts : manifest.current_ftp?.confirmed_watts;
+    const workingFtp = liveFtp ?? publishedFtp;
+    return {
+      workingFtp,
+      isConfirmed: Boolean(workingFtp && confirmedFtp === workingFtp),
+      targetFtp: positiveNumber(live?.ftp_watts, manifest.target?.ftp_watts),
+      targetDate: target,
+      targetWeight: positiveNumber(live?.target_weight_kg, manifest.target?.target_weight_kg),
+      fromManifest: !liveFtp,
+    };
+  };
 
   const updateLiveSystemStatus = async container => {
-    try {
-      const res = await fetch('https://tricoach-garmin.onrender.com/api/mission-control/status', { cache: 'no-store' });
-      if (!res.ok) throw new Error('status_unavailable');
-      const data = await res.json();
-      container.replaceChildren();
-      const serviceDefs = [
-        { key: 'garmin', name: 'Garmin Connect' },
-        { key: 'openai', name: 'AI Coach Omni' },
-        { key: 'render_api', name: 'Render API' },
-        { key: 'telegram', name: '@Ardenisov_bot' },
-        { key: 'pages', name: 'GitHub Pages' },
-        { key: 'database', name: 'PostgreSQL' },
-      ];
-      serviceDefs.forEach(s => {
-        const info = data.services?.[s.key] || { status: 'UNKNOWN', detail: '' };
-        const rawStatus = String(info.status || 'UNKNOWN').toUpperCase();
-        let cls = 'unknown';
-        if (rawStatus === 'OK') cls = 'ok';
-        else if (rawStatus === 'STALE' || rawStatus === 'CACHED') cls = 'stale';
-        else if (rawStatus === 'FAILED') cls = 'failed';
+    const data = await loadMissionStatus();
+    const statuses = {OK: ['ok', 'Работает'], STALE: ['stale', 'Данные устарели'], CACHED: ['stale', 'Из кеша'], FAILED: ['failed', 'Сбой']};
+    const pills = Object.entries(SERVICE_LABELS).map(([key, label]) => {
+      const info = data?.services?.[key];
+      const [state, value] = statuses[info?.status] || ['unknown', 'Нет статуса'];
+      const pill = make('div', `status-pill ${state}`);
+      pill.append(make('span', 'status-dot'), make('span', 'status-name', label), make('b', 'status-val', value));
+      return pill;
+    });
+    container.replaceChildren(...pills);
 
-        const pill = make('div', `status-pill ${cls}`);
-        pill.title = info.detail || '';
-        pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${s.name}:</span> <b class="status-val">${rawStatus === 'CACHED' ? 'ИСТОРИЯ В БАЗЕ' : rawStatus}</b>`;
-        container.append(pill);
-      });
-
-      const gateBadge = document.getElementById('safety-gate-status-badge');
-      if (gateBadge && data.safety_gates) {
-        const rawGate = String(data.safety_gates.status || 'PENDING').toUpperCase();
-        const gateCls = rawGate === 'CLEAR' ? 'safe-badge' : 'safe-badge pending';
-        gateBadge.className = gateCls;
-        gateBadge.textContent = data.safety_gates.detail || 'Статус согласования неизвестен.';
-      }
-    } catch (_err) {
-      container.replaceChildren();
-      ['Garmin Connect', 'AI Coach Omni', 'Render API', '@Ardenisov_bot', 'GitHub Pages', 'PostgreSQL'].forEach(name => {
-        const pill = make('div', 'status-pill failed');
-        pill.title = 'Бэкенд недоступен или сетевая ошибка';
-        pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${name}:</span> <b class="status-val">FAILED</b>`;
-        container.append(pill);
-      });
+    const gateBadge = document.getElementById('safety-gate-status-badge');
+    if (gateBadge && data?.safety_gates) {
+      const {status, pending_proposals_count: pending} = data.safety_gates;
+      gateBadge.className = status === 'CLEAR' ? 'safe-badge' : 'safe-badge pending';
+      gateBadge.textContent = pending > 0 ? 'Есть черновик для согласования в Telegram.'
+        : status === 'CLEAR' ? 'Согласование пройдено.' : 'Статус согласования не подтверждён.';
+    } else if (gateBadge) {
+      gateBadge.textContent = 'Статус согласования недоступен.';
     }
   };
 
   const updateLivePlanBanner = async (container, publishedVersion) => {
-    try {
-      const res = await fetch('https://tricoach-garmin.onrender.com/api/mission-control/status', { cache: 'no-store' });
-      if (!res.ok) throw new Error('status_unavailable');
-      const data = await res.json();
-      const gates = data.safety_gates || {};
-      const version = gates.active_version;
-      const title = make('div', 'banner-pill', version ? `📋 Действующая программа: Версия ${version}` : '📋 Версия программы не подтверждена');
-      const message = version && publishedVersion && version !== publishedVersion
-        ? `На сайте версия ${publishedVersion}. В TriCoach утверждена версия ${version}. Ожидается публикация.`
-        : gates.detail || 'Статус согласования временно не подтверждён.';
-      const detail = make('p', 'banner-sub', message);
-      container.replaceChildren(title, detail);
-    } catch (_err) {
-      const title = make('div', 'banner-pill', '📋 Статус утверждённой программы недоступен');
-      const detail = make('p', 'banner-sub', 'Повторите проверку позже; версия берётся из живого состояния TriCoach.');
-      container.replaceChildren(title, detail);
+    const data = await loadMissionStatus();
+    const gates = data?.safety_gates || {};
+    const version = gates.active_version;
+    const note = container.querySelector('.banner-sub');
+    if (!note) return;
+    if (!publishedVersion) {
+      note.textContent = version ? `В TriCoach утверждена версия ${version}. Страница её ещё не загрузила.` : 'Версия плана недоступна.';
+    } else if (version && version !== publishedVersion) {
+      note.textContent = `В TriCoach утверждена версия ${version}. На сайте пока версия ${publishedVersion}.`;
+    } else {
+      note.textContent = version ? 'Версия сайта совпадает с TriCoach.' : 'Статус в TriCoach временно недоступен.';
     }
+  };
+
+  const MONDAY_TO_SUNDAY = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const getWeekDates = value => {
+    const start = new Date(`${value}T12:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - (start.getUTCDay() + 6) % 7);
+    return MONDAY_TO_SUNDAY.map((_, index) => {
+      const day = new Date(start);
+      day.setUTCDate(start.getUTCDate() + index);
+      return day.toISOString().slice(0, 10);
+    });
+  };
+
+  const renderWeekAtAGlance = manifest => {
+    const today = localMoscowDate();
+    const sessions = (manifest.weeks || []).flatMap(week => week.days || []);
+    const byDate = new Map(sessions.map(session => [session.date, session]));
+    const currentWeek = getWeekDates(today);
+    const hasCurrentWeek = currentWeek.some(date => byDate.has(date));
+    const nextDate = sessions.map(session => session.date).filter(date => date > today).sort()[0];
+    const dates = !hasCurrentWeek && nextDate ? getWeekDates(nextDate) : currentWeek;
+
+    const header = make('header', 'training-week-heading');
+    const title = make('h1', '', hasCurrentWeek || !nextDate ? 'На этой неделе' : 'Ближайшая неделя');
+    const trainingCount = dates.filter(date => byDate.has(date) && byDate.get(date).discipline !== 'rest').length;
+    const dateRange = `${formatDate(dates[0])} – ${formatDate(dates.at(-1))}`;
+    const context = make('p', '', [
+      dateRange,
+      trainingCount ? `занятий: ${trainingCount}` : '',
+      manifest.version_number ? `версия ${manifest.version_number}` : '',
+    ].filter(Boolean).join(' · '));
+    header.append(title, context);
+
+    const days = make('div', 'training-week-days');
+    days.setAttribute('role', 'group');
+    days.setAttribute('aria-label', 'Дни недели по московскому времени');
+    const card = make('article', 'training-day-card');
+    card.setAttribute('aria-live', 'polite');
+    const buttons = dates.map((date, index) => {
+      const session = byDate.get(date);
+      const label = {bike: 'Вело', strength: 'Сила', rest: 'Отдых', recovery: 'Восст.'}[session?.discipline] || '—';
+      const button = make('button', 'training-week-day');
+      button.type = 'button';
+      button.append(
+        make('span', 'training-day-name', MONDAY_TO_SUNDAY[index]),
+        make('b', 'training-day-date', String(parseDate(date).getDate())),
+        make('span', 'training-day-discipline', label),
+      );
+      if (date === today) button.setAttribute('aria-current', 'date');
+      button.setAttribute('aria-label', `${MONDAY_TO_SUNDAY[index]}, ${formatDate(date)}. ${session?.title || 'Занятие не опубликовано'}`);
+      button.onclick = () => selectDay(date);
+      days.append(button);
+      return button;
+    });
+
+    function selectDay(date) {
+      const session = byDate.get(date);
+      buttons.forEach((button, index) => button.setAttribute('aria-pressed', String(dates[index] === date)));
+      card.replaceChildren();
+      const dateLabel = make('div', 'training-selected-date', `${date === today ? 'Сегодня · ' : ''}${formatDate(date)}`);
+      card.append(dateLabel);
+      if (!session) {
+        card.append(make('h2', '', 'Занятие не опубликовано'));
+        card.append(make('p', '', 'На эту дату в опубликованном плане нет записи.'));
+        return;
+      }
+      const heading = make('div', 'training-session-heading');
+      const [tag, label] = sessionKind(session.discipline);
+      const title = session.title?.replace(new RegExp(`^${label}\\s+`, 'iu'), '') || 'Тренировка';
+      heading.append(make('span', `tag ${tag}`, label), make('h2', '', title));
+      const duration = formatDuration(session.duration_min);
+      if (duration) heading.append(make('span', 'training-duration', duration));
+      card.append(heading);
+      if (session.goal) card.append(make('p', 'training-session-goal', session.goal));
+      const phases = renderSessionPhases(session);
+      if (phases.childElementCount) card.append(phases);
+      if (session.discipline === 'bike') {
+        const ftp = getWorkingFtp(manifest);
+        const actions = make('div', 'training-session-actions');
+        actions.append(renderExportActions(session, ftp), renderMyWhooshHelp());
+        card.append(actions);
+      }
+    }
+
+    selectDay(dates.includes(today) ? today : nextDate || dates[0]);
+    const actions = make('div', 'training-week-links');
+    const next = make('button', 'workout-link', 'Ближайшие 3 велотренировки');
+    next.type = 'button';
+    next.onclick = () => {
+      document.querySelector('[data-tab="plan"]')?.click();
+      document.getElementById('next-bike-exports')?.scrollIntoView({block: 'start'});
+    };
+    if (sessions.length) actions.append(next);
+    const week = make('section', 'training-week');
+    week.append(header, days, card, actions);
+    return week;
+  };
+
+  const renderProfileMetrics = manifest => {
+    const {workingFtp, isConfirmed, targetFtp, targetDate, targetWeight, fromManifest} = manifest.profile;
+    const metrics = make('div', 'training-week-metrics');
+    const metric = (label, value, note) => {
+      const card = make('div', 'training-metric');
+      card.append(make('span', '', label), make('strong', '', value));
+      if (note) card.append(make('small', '', note));
+      return card;
+    };
+    const exportFtp = getWorkingFtp(manifest);
+    const metricNotice = fromManifest && workingFtp ? 'По опубликованному плану' : isConfirmed ? 'Подтверждён тестом' : 'Заявлен спортсменом';
+    metrics.append(
+      metric('Рабочий FTP', workingFtp ? `${workingFtp} Вт` : '—', metricNotice),
+      metric('Цель FTP', targetFtp ? `${targetFtp} Вт` : '—', targetDate ? `к ${formatDate(targetDate)} ${parseDate(targetDate).getFullYear()}` : ''),
+      metric('Целевой вес', targetWeight ? `${targetWeight} кг` : '—', exportFtp && exportFtp !== workingFtp ? `База экспорта ${exportFtp} Вт` : ''),
+    );
+
+    return metrics;
   };
 
   const renderDashboard = manifest => {
@@ -587,128 +563,43 @@
     if (!dashboard) return;
     dashboard.replaceChildren();
 
-    // 1. Technical System Status Bar (Live health checks)
-    const statusBar = make('div', 'mission-status-bar');
-    ['Garmin Connect', 'AI Coach Omni', 'Render API', '@Ardenisov_bot', 'GitHub Pages', 'PostgreSQL'].forEach(name => {
-      const pill = make('div', 'status-pill unknown');
-      pill.innerHTML = `<span class="status-dot"></span><span class="status-name">${name}:</span> <b class="status-val">SYNC...</b>`;
-      statusBar.append(pill);
-    });
-    dashboard.append(statusBar);
-    updateLiveSystemStatus(statusBar);
-
-    // 1b. Active plan version notice
     const planBanner = make('div', 'active-plan-banner');
     planBanner.append(
-      make('div', 'banner-pill', `📋 Действующая программа: Версия ${manifest.version_number || '—'}`),
-      make('p', 'banner-sub', 'Проверяю актуальный статус в TriCoach…'),
+      make('div', 'banner-pill', manifest.version_number ? `Календарь · версия ${manifest.version_number}` : 'Календарь не загружен'),
+      make('p', 'banner-sub', 'Сверяю версию с TriCoach…'),
     );
-    dashboard.append(planBanner);
     updateLivePlanBanner(planBanner, manifest.version_number);
 
-    const workingFtp = getWorkingFtp(manifest);
-    const target = manifest.target || {ftp_watts: 340, date: '2027-07-11', target_weight_kg: 80.0, target_w_kg: 4.25};
-    const targetFtp = Number(target.ftp_watts) || 340;
-    const targetDate = target.date || '2027-07-11';
-    const targetWeight = Number(target.target_weight_kg) || 80.0;
-    const targetWkg = Number(target.target_w_kg) || Number((targetFtp / targetWeight).toFixed(2));
-    const gap = targetFtp - workingFtp;
-    const totalWeeks = Array.isArray(manifest.weeks) && manifest.weeks.length > 0 ? (manifest.weeks.length - 1) : 34;
-    const isConfirmed = Boolean(manifest.current_ftp?.confirmed_watts);
-    const today = localMoscowDate();
-    const allDays = (manifest.weeks || []).flatMap(week => week.days || []);
-    const todaySession = allDays.find(day => day.date === today);
-    const nextSession = allDays.filter(day => day.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
-    const session = todaySession || nextSession;
+    const insightCard = make('details', 'card training-service-status');
+    const statusBar = make('div', 'mission-status-bar');
+    const badge = make('p', 'safe-badge pending', 'Сверяю статус согласования…');
+    badge.id = 'safety-gate-status-badge';
+    insightCard.append(make('summary', '', 'Статус сервисов и согласования'), badge, statusBar);
 
-    // 2. Hero Mission Header
-    const hero = make('div', 'hero mission-hero');
-    const left = make('div', 'hero-content');
-    left.innerHTML = `
-      <div class="hero-live-badge"><span class="pulse-dot"></span> MISSION CONTROL · ВЕЛОМОЩЬ 2.0</div>
-      <h1>Фокус дня <em>· ${todaySession ? 'Сегодня' : 'Ближайший старт'}</em></h1>
-      <p class="hero-copy">Стратегическая цель: <b>FTP ${targetFtp} Вт</b> к <b>${formatDate(targetDate)}</b> (${targetDate}). Разрыв: <b>${gap} Вт</b>. Рабочий FTP: <b>${workingFtp} Вт</b> (${isConfirmed ? 'подтверждён' : 'заявлен'}).</p>
-    `;
-
-    const card = make('article', 'next-card today-focus-card');
-    card.append(make('small', '', todaySession ? '🔴 Сегодняшняя сессия' : '⚡ Ближайшая сессия плана'));
-    if (session) {
-      const [tagClass, kind] = sessionKind(session.discipline);
-      const titleRow = make('div', 'hero-session-header');
-      titleRow.innerHTML = `<span class="tag ${tagClass}">${kind}</span> <h2 class="hero-session-title">${session.title || 'Тренировка'}</h2>`;
-      card.append(titleRow);
-      card.append(make('div', 'watts', formatDuration(session.duration_min)));
-      card.append(make('p', 'session-meta-line', `${formatDate(session.date)} · ${session.goal || ''}`));
-      if (session.main_set) {
-        card.append(make('p', 'session-set-preview', sessionWattText(session.main_set, workingFtp)));
-      }
-
-      // Teleport 1-click action buttons
-      if (session.discipline === 'bike') {
-        const actionRow = make('div', 'teleport-actions-row');
-        const zwoBtn = make('button', 'btn btn-action-zwo', '🚴 Скачать ZWO');
-        zwoBtn.type = 'button';
-        zwoBtn.onclick = () => exportZwoFile(session, workingFtp);
-
-        const fitBtn = make('button', 'btn btn-action-fit', '⌚ Скачать FIT');
-        fitBtn.type = 'button';
-        fitBtn.onclick = () => exportFitFile(session, workingFtp);
-
-        const helpBtn = make('button', 'btn btn-action-help', 'ℹ️ Инструкция MyWhoosh');
-        helpBtn.type = 'button';
-        helpBtn.onclick = showMyWhooshGuideModal;
-
-        actionRow.append(zwoBtn, fitBtn, helpBtn);
-        card.append(actionRow);
-      }
-    } else {
-      card.append(make('h2', '', 'План в режиме готовности'));
-      card.append(make('p', '', 'Тренировки отобразятся после синхронизации.'));
-    }
-    hero.append(left, card);
-
-    // 3. Quick KPI Metrics (Unified athlete profile)
-    const metrics = make('div', 'metrics');
-    const metric1 = make('article', 'metric');
-    metric1.innerHTML = `<span class="metric-label">Рабочий FTP</span><b class="metric-val cyan">${workingFtp} Вт</b><small class="metric-sub">${isConfirmed ? '✓ Подтверждён тестом' : '⚡ Заявлен спортсменом'}</small>`;
-    const metric2 = make('article', 'metric');
-    metric2.innerHTML = `<span class="metric-label">Разрыв до цели</span><b class="metric-val amber">+${gap} Вт</b><small class="metric-sub">Цель ${targetFtp} Вт к ${formatDate(targetDate)}</small>`;
-    const metric3 = make('article', 'metric');
-    metric3.innerHTML = `<span class="metric-label">Удельная мощность</span><b class="metric-val lime">${targetWkg} Вт/кг</b><small class="metric-sub">Целевой вес ${targetWeight} кг</small>`;
-    const metric4 = make('article', 'metric');
-    metric4.innerHTML = `<span class="metric-label">План подготовки</span><b class="metric-val emerald">${manifest.version_number ? `Версия ${manifest.version_number}` : 'План загружен'}</b><small class="metric-sub">~${totalWeeks} нед. микроциклов</small>`;
-    metrics.append(metric1, metric2, metric3, metric4);
-
-    // 4. Daily Readiness & Safety Insight Card
-    const insightCard = make('article', 'card readiness-insight-card');
-    insightCard.innerHTML = `
-      <h3>Согласование плана</h3>
-      <div class="safety-indicator-row">
-        <span class="safe-badge pending" id="safety-gate-status-badge">Проверяю статус согласования…</span>
-      </div>
-    `;
-
-    dashboard.append(hero, metrics, insightCard);
+    dashboard.append(renderWeekAtAGlance(manifest), renderProfileMetrics(manifest), planBanner, insightCard);
+    updateLiveSystemStatus(statusBar);
   };
 
   // ── Mission Control Section 2: FTP 340 (Digital Twin) ────────────────────────
 
   const renderDigitalTwinPane = (pane, manifest) => {
     pane.replaceChildren();
-    const workingFtp = getWorkingFtp(manifest);
-    const target = manifest.target || {ftp_watts: 340, date: '2027-07-11', target_weight_kg: 80.0, target_w_kg: 4.25};
-    const targetFtp = Number(target.ftp_watts) || 340;
-    const targetDate = target.date || '2027-07-11';
-    const targetWeight = Number(target.target_weight_kg) || 80.0;
-    const targetWkg = Number(target.target_w_kg) || Number((targetFtp / targetWeight).toFixed(2));
-    const gap = targetFtp - workingFtp;
-    const isConfirmed = Boolean(manifest.current_ftp?.confirmed_watts);
-    const totalWeeks = Array.isArray(manifest.weeks) && manifest.weeks.length > 0 ? (manifest.weeks.length - 1) : 34;
+    const {workingFtp, isConfirmed, targetFtp, targetDate, targetWeight} = manifest.profile;
+    const targetWkg = targetFtp && targetWeight ? (targetFtp / targetWeight).toFixed(2) : null;
+    const gap = workingFtp && targetFtp ? targetFtp - workingFtp : null;
+    const workingFtpText = workingFtp ? `${workingFtp} Вт` : 'Нет данных';
+    const targetFtpText = targetFtp ? `${targetFtp} Вт` : 'Нет данных';
+    const targetDateText = targetDate ? formatDate(targetDate) : 'не указана';
+    const goalNotes = [
+      gap === null ? '' : `До цели ${Math.max(0, gap)} Вт`,
+      targetWeight ? `Целевой вес ${targetWeight} кг` : '',
+      targetWkg ? `${targetWkg} Вт/кг` : '',
+    ].filter(Boolean).join(' · ');
 
     const header = make('div', 'dt-header');
     header.append(
-      make('h2', '', 'DIGITAL TWIN · Персональная модель FTP 340'),
-      make('p', 'sub', `Объяснимая научная траектория развития мощности к ${formatDate(targetDate)} (${targetDate}) на основе доказательной физиологии.`),
+      make('h2', '', 'FTP и профиль мощности'),
+      make('p', 'sub', 'Контрольные тесты из календаря и персональные измерения Garmin.'),
     );
 
     // KPI Cards - No fictitious sports data
@@ -716,12 +607,12 @@
     kpiGrid.append(
       (() => {
         const c = make('article', 'metric');
-        c.innerHTML = `<span>Текущий рабочий FTP</span><b>${workingFtp} Вт</b><small>${isConfirmed ? 'Подтверждён тестом' : 'Заявлен спортсменом (не подтверждён тестом)'}</small>`;
+        c.innerHTML = `<span>Текущий рабочий FTP</span><b>${workingFtpText}</b><small>${workingFtp ? (isConfirmed ? 'Подтверждён тестом' : 'Заявлен спортсменом') : 'Статус неизвестен'}</small>`;
         return c;
       })(),
       (() => {
         const c = make('article', 'metric');
-        c.innerHTML = `<span>Цель к ${targetDate}</span><b class="lime">${targetFtp} Вт</b><small>Разрыв: ${gap} Вт · Вес: ${targetWeight} кг (${targetWkg} Вт/кг)</small>`;
+        c.innerHTML = `<span>Цель · ${targetDateText}</span><b class="lime">${targetFtpText}</b><small>${goalNotes}</small>`;
         return c;
       })(),
       (() => {
@@ -736,16 +627,11 @@
       })(),
     );
 
-    // Honest Trajectory Notice Card - No fictitious trajectory or CI corridor
     const trajectoryCard = make('article', 'card dt-chart-card');
-    trajectoryCard.innerHTML = `
-      <h3>📈 Модель траектории FTP к ${formatDate(targetDate)}</h3>
-      <div class="dt-uncalibrated-notice">
-        <p><b>Статус калибровки:</b> Недостаточно данных для построения математического коридора.</p>
-        <p>Текущий рабочий FTP <b>${workingFtp} Вт</b> ${isConfirmed ? 'подтверждён тестом' : 'зафиксирован со слов спортсмена и пока не верифицирован контрольным тестом'}. Целевой ориентир — <b>${targetFtp} Вт к ${targetDate}</b> (+${gap} Вт за ~${totalWeeks} недели, средний темп ~${(gap / totalWeeks).toFixed(1)} Вт/неделя).</p>
-        <p class="data-note">Темп до цели показывает требуемый прирост. Для оценки индивидуальной адаптации нужна серия сопоставимых тестов.</p>
-      </div>
-    `;
+    trajectoryCard.append(
+      make('h3', '', 'Прогноз FTP'),
+      make('p', 'dt-uncalibrated-notice', 'Недостаточно данных для прогноза. Для оценки адаптации нужна серия сопоставимых тестов.'),
+    );
 
     // Power-Duration Curve (MMP) - No fictitious numbers
     const mmpCard = make('article', 'card dt-mmp-card');
@@ -760,7 +646,7 @@
         <div class="mmp-item"><span class="mmp-dur">5 мин (P5)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
         <div class="mmp-item"><span class="mmp-dur">10 мин</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
         <div class="mmp-item"><span class="mmp-dur">20 мин (P20)</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">Не откалиброван</b><span class="mmp-wkg">—</span></div>
-        <div class="mmp-item"><span class="mmp-dur">Рабочий FTP</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">${workingFtp} Вт (${isConfirmed ? 'подтверждён' : 'заявлен'})</b><span class="mmp-wkg">—</span></div>
+        <div class="mmp-item"><span class="mmp-dur">Рабочий FTP</span><b class="mmp-w" style="font-size:14px;color:var(--dim);">${workingFtpText}</b><span class="mmp-wkg">—</span></div>
       </div>
     `;
 
@@ -782,60 +668,18 @@
     `;
 
     const testsCard = make('article', 'card dt-tests-card');
-    testsCard.innerHTML = `
-      <h3>🎯 Контрольные тесты и вехи Плана v5 (P5 + P20 + P40)</h3>
-      <div class="dt-roadmap">
-        <div class="dt-milestone-card active-target">
-          <small>Неделя 1–2 (Ноябрь 2026)</small>
-          <b>280 Вт (Баслайн)</b>
-          <span>T5 · T20 · P40 срезы</span>
-          <span class="badge-status current">ТЕКУЩИЙ</span>
-        </div>
-        <div class="dt-milestone-card">
-          <small>Неделя 10 (Январь 2027)</small>
-          <b>≥ 295 Вт (Чекпоинт 1)</b>
-          <span>T5 + T20 срезы</span>
-          <span class="badge-status upcoming">В ПЛАНЕ</span>
-        </div>
-        <div class="dt-milestone-card">
-          <small>Неделя 17–18 (Март 2027)</small>
-          <b>≥ 310 Вт (Чекпоинт 2)</b>
-          <span>TTE-тест + P40</span>
-          <span class="badge-status upcoming">В ПЛАНЕ</span>
-        </div>
-        <div class="dt-milestone-card">
-          <small>Неделя 26 (Май 2027)</small>
-          <b>≥ 325 Вт (Чекпоинт 3)</b>
-          <span>T5 + T20 срезы</span>
-          <span class="badge-status upcoming">В ПЛАНЕ</span>
-        </div>
-        <div class="dt-milestone-card">
-          <small>Неделя 34 (Июль 2027)</small>
-          <b class="lime">340 Вт (ФИНАЛ)</b>
-          <span>4.25 Вт/кг @ 80 кг</span>
-          <span class="badge-status final">ФИНАЛ</span>
-        </div>
-      </div>
-    `;
-    const testList = make('ul', 'test-milestones-list');
-    testList.style.marginTop = '14px';
+    testsCard.append(make('h3', '', 'Контрольные тесты по календарю'));
     const tests = (manifest.weeks || []).flatMap(week => week.days || [])
       .filter(session => session.date >= localMoscowDate() && /^ТЕСТ(?:\s|$)/u.test(session.title || ''));
     if (tests.length) {
+      const list = make('ul', 'test-milestones-list');
       for (const session of tests) {
-        testList.append(make('li', '', `${formatDate(session.date)} · ${session.title}`));
+        list.append(make('li', '', `${formatDate(session.date)} · ${session.title}`));
       }
+      testsCard.append(list);
     } else {
-      [
-        '22.11.2026 (Неделя 1): ТЕСТ T5 (5\' all-out) — калибровка пиковой аэробной мощности (MAP).',
-        '26.11.2026 (Неделя 2): ТЕСТ T20 (20\' all-out) — подтверждение рабочего FTP (0.95 × P20).',
-        '29.11.2026 (Неделя 2): ТЕСТ P40 (40\' best effort) — базовый срез пороговой выносливости.',
-        'Январь 2027 (Неделя 10): Контрольный срез Блока 2 (T5 + T20) → проверка темпа роста FTP.',
-        'Март 2027 (Неделя 17–18): TTE-тест (95% continuous) + срезы T5 / T20 / P40.',
-        'Июль 2027 (Неделя 34): Финальный вердикт: цель 336–340 Вт (T5, T20, P40).',
-      ].forEach(text => testList.append(make('li', '', text)));
+      testsCard.append(make('p', '', 'В опубликованном календаре нет предстоящих контрольных тестов.'));
     }
-    testsCard.append(testList);
 
     // Privacy-Protected Telemetry Box - Secure Authorization (No query token)
     const privacyBox = make('article', 'card telemetry-privacy-box');
@@ -845,7 +689,7 @@
         <p>Конфиденциальные медицинские данные и восстановление доступны только владельцу. Получите временный PIN командой <b>/telemetry_pin</b> в Telegram; срок действия — 15 минут.</p>
       </div>
       <div class="privacy-inputs">
-        <input type="password" id="telemetry-pin-input" placeholder="PIN из Telegram" class="ftpin" style="width:180px;padding:8px 12px;" />
+        <input type="password" id="telemetry-pin-input" aria-label="PIN из Telegram" placeholder="PIN из Telegram" class="ftpin" style="width:180px;padding:8px 12px;" />
         <button type="button" class="btn" id="btn-telemetry-unlock" style="background:var(--acc2);color:#0f1115;font-weight:700;">Открыть телеметрию</button>
       </div>
       <div id="telemetry-secure-display" style="display:none;margin-top:14px;"></div>
@@ -908,26 +752,22 @@
 
   const renderCoachPane = (pane, manifest) => {
     pane.replaceChildren();
-    const target = manifest?.target || {ftp_watts: 340, date: '2027-07-11'};
+    const {targetFtp, targetDate} = manifest.profile;
     const card = make('article', 'card coach-architecture-card');
     card.innerHTML = `
-      <h2>OMNI HEAD PERFORMANCE COACH · Архитектура и Договор ответственности</h2>
+      <h2>Тренер Omni</h2>
       <div class="coach-principles">
         <div class="cp-item">
-          <b>🎯 Главный KPI: FTP ${target.ftp_watts || 340} Вт (${formatDate(target.date || '2027-07-11')})</b>
-          <p>WorldTour-уровень требовательности, норвежская модель выносливости, строгая дисциплина удержания целевых ватт и постоянный поиск резервов мощности.</p>
+          <b>Разбор тренировки</b>
+          <p>Пришли отчёт или попроси разобрать велотренировку из Garmin. Omni объяснит, что делать на следующей сессии.</p>
         </div>
         <div class="cp-item">
-          <b>🛡️ Динамический контроль опорно-двигательного аппарата</b>
-          <p>Боль 0/10 + восстановление = развитие рекрутирования волокон (силовая работа до RPE 8–9). Осевые нагрузки — только после врачебного допуска. При боли >0 — немедленный стоп.</p>
+          <b>Адаптация программы</b>
+          <p>Расскажи, как изменилось расписание. Omni подготовит черновик. Календарь обновится после твоего подтверждения в Telegram.</p>
         </div>
         <div class="cp-item">
-          <b>🤝 Договор ответственности (Performance Contract)</b>
-          <p>Тренер отвечает за физиологическую точность стимула и адаптации. Спортсмен — за дисциплину выполнения и 7 ежедневных вопросов самоконтроля.</p>
-        </div>
-        <div class="cp-item">
-          <b>👤 Человеческий контроль (Human-in-the-Loop)</b>
-          <p>Ни одно изменение плана, перенос интервалов или корректировка мощности не применяются вслепую: требуется личное утверждение спортсмена в Telegram.</p>
+          <b>Цель подготовки</b>
+          <p>${targetFtp ? `FTP ${targetFtp} Вт` : 'Задаётся в TriCoach'}${targetDate ? ` к ${formatDate(targetDate)}` : ''}.</p>
         </div>
       </div>
       <div class="coach-connect-box">
@@ -963,38 +803,29 @@
     const shell = make('header', 'board-shell');
     const brand = make('div', 'brand-row');
     const brandLeft = make('div', 'brand');
-    brandLeft.innerHTML = `
-      <div class="bolt">⚡</div>
-      <div class="brand-text">
-        <span class="brand-name">ВЕЛОМОЩЬ <span class="brand-badge">PRO</span></span>
-        <span class="brand-sub">FTP 340 · ROAD TO 4.25 W/KG</span>
-      </div>
-    `;
-    const targetDateStr = '2027-07-11';
-    const daysUntilTarget = Math.max(0, Math.ceil((new Date(targetDateStr + 'T12:00:00') - new Date()) / 86400000));
+    const brandName = make('span', 'brand-name', 'ВелоМощь');
+    brandLeft.append(make('span', 'bolt', 'V'), brandName);
     const brandRight = make('div', 'brand-meta');
-    brandRight.innerHTML = `
-      <span class="date-chip">🎯 Цель: <b>11 июля 2027</b></span>
-      <span class="countdown-chip">⏳ <b>${daysUntilTarget} дн.</b></span>
-    `;
+    const targetChip = make('span', 'date-chip');
+    brandRight.append(targetChip);
     brand.append(brandLeft, brandRight);
     const tabs = make('nav', 'tabbar');
-    tabs.setAttribute('aria-label', 'Разделы борда');
+    tabs.setAttribute('aria-label', 'Разделы ВелоМощи');
 
     // 4 Key Mission Control tabs + guide
     const TAB_DEFS = [
-      ['now', '⚡ СЕГОДНЯ'],
-      ['ftp340', '📈 FTP 340'],
-      ['plan', '📅 КАЛЕНДАРЬ'],
-      ['coach', '🤖 AI COACH'],
-      ['guide', '📚 БАЗА ЗНАНИЙ'],
+      ['now', 'Неделя'],
+      ['plan', 'Календарь'],
+      ['ftp340', 'FTP'],
+      ['coach', 'Omni'],
+      ['guide', 'База знаний'],
     ];
 
     TAB_DEFS.forEach(([key, label], index) => {
       const button = make('button', 'tab', label);
       button.type = 'button';
       button.dataset.tab = key;
-      button.setAttribute('aria-selected', String(index === 0));
+      if (index === 0) button.setAttribute('aria-current', 'page');
       tabs.append(button);
     });
     shell.append(brand, tabs);
@@ -1013,8 +844,7 @@
     planPane.dataset.pane = 'plan';
     if (sections.plan) planPane.append(sections.plan);
 
-    const controlPane = make('div', 'pane');
-    controlPane.dataset.pane = 'control';
+    const controlPane = make('div', 'training-reference');
     GROUPS.control.forEach(id => sections[id] && controlPane.append(sections[id]));
 
     const guidePane = make('div', 'pane');
@@ -1026,11 +856,10 @@
       ftp340: ftp340Pane,
       plan: planPane,
       coach: coachPane,
-      control: controlPane,
       guide: guidePane,
     };
 
-    shell.after(dashboard, ftp340Pane, planPane, coachPane, controlPane, guidePane);
+    shell.after(dashboard, ftp340Pane, planPane, coachPane, guidePane);
 
     const guideSections = [...guidePane.querySelectorAll('section')];
     if (guideSections.length) {
@@ -1051,8 +880,12 @@
 
     tabs.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       Object.entries(panes).forEach(([key, pane]) => pane.classList.toggle('active', key === tab.dataset.tab));
-      tabs.querySelectorAll('.tab').forEach(item => item.setAttribute('aria-selected', String(item === tab)));
-      window.scrollTo({top: 0, behavior: 'smooth'});
+      tabs.querySelectorAll('.tab').forEach(item => {
+        if (item === tab) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+      });
+      if (tab.dataset.tab === 'plan') window.scrollTo({top: 0});
+      else window.scrollTo({top: 0, behavior: 'smooth'});
     }));
 
     wrap.querySelectorAll(':scope > nav a[href^="#"]').forEach(link => link.addEventListener('click', () => {
@@ -1070,60 +903,38 @@
       }
     }));
 
+    const liveStatus = loadMissionStatus();
+    let manifest;
     try {
-      const response = await fetch(`adaptive-plan.json?cache=${Date.now()}`, {cache: 'no-store'});
+      const response = await fetch(`adaptive-plan.json?cache=${Date.now()}`, {cache: 'no-store', ...timeoutOptions(10000)});
       if (!response.ok) throw new Error('plan_unavailable');
-      const manifest = await response.json();
+      manifest = await response.json();
+      if (!Array.isArray(manifest.weeks)) throw new Error('plan_invalid');
       calendarVersion = manifest.version_number;
-
-      // Live Hybrid Rendering: Overlay verified completion & power telemetry from API
-      try {
-        const liveRes = await fetch('https://tricoach-garmin.onrender.com/api/plan/live-status', {
-          headers: { 'Accept': 'application/json' },
-        });
-        if (liveRes.ok) {
-          const liveData = await liveRes.json();
-          if (liveData) {
-            if (liveData.date_overrides) {
-              (manifest.weeks || []).forEach(w => {
-                (w.days || []).forEach(d => {
-                  if (liveData.date_overrides[d.date]) {
-                    Object.assign(d, liveData.date_overrides[d.date]);
-                  }
-                });
-              });
-            }
-            if (liveData.completed_sessions) {
-              (manifest.weeks || []).forEach(w => {
-                (w.days || []).forEach(d => {
-                  if (liveData.completed_sessions[d.date]) {
-                    d.completed = true;
-                    Object.assign(d, liveData.completed_sessions[d.date]);
-                  }
-                });
-              });
-            }
-          }
-        }
-      } catch (_e) {
-        // Standalone / offline fallback
-      }
-      const chip = document.querySelector('.date-chip');
-      if (chip && manifest.target) {
-        chip.textContent = `Цель FTP ${manifest.target.ftp_watts || 340} · ${formatDate(manifest.target.date || '2027-07-11')}`;
-      }
-      renderDashboard(manifest);
-      renderDigitalTwinPane(ftp340Pane, manifest);
-      renderCoachPane(coachPane, manifest);
-      renderPlan(manifest);
-      renderMacro(manifest);
-      renderCalculator(manifest);
     } catch (_error) {
-      const message = document.getElementById('approved-plan-calendar');
-      if (message) message.replaceChildren(make('div', 'card plan-loading', 'Не удалось загрузить утверждённый план. Показ старых тренировок отключён.'));
-      renderMacro({weeks: []});
-      renderDashboard({target: {ftp_watts: 340, date: '2027-07-11', target_weight_kg: 80.0, target_w_kg: 4.25}, current_ftp: {reported_watts: 280}, weeks: [], version_number: null});
+      manifest = {weeks: [], version_number: null};
     }
+
+    function drawProfile(status) {
+      manifest.profile = profileFor(manifest, status?.target);
+      const {targetFtp, targetDate} = manifest.profile;
+      targetChip.textContent = targetFtp ? `FTP ${targetFtp} Вт${targetDate ? ` · ${formatDate(targetDate)}` : ''}` : '';
+      targetChip.hidden = !targetFtp;
+      renderDigitalTwinPane(ftp340Pane, manifest);
+      ftp340Pane.append(controlPane);
+      renderCoachPane(coachPane, manifest);
+    }
+
+    drawProfile(null);
+    renderDashboard(manifest);
+    renderPlan(manifest);
+    renderMacro(manifest);
+    const status = await liveStatus;
+    if (status?.target) {
+      drawProfile(status);
+      dashboard.querySelector('.training-week-metrics').replaceWith(renderProfileMetrics(manifest));
+    }
+    renderCalculator(manifest);
   };
 
   window.toggleAll = open => document.querySelectorAll('details.week').forEach(week => {
