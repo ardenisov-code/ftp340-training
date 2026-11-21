@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment_retry.outputs.page_url || steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +63,16 @@ jobs:
           path: /tmp/ftp340-pages
       - name: Deploy approved Pages artifact
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ftp340-approved-pages
+      - name: Wait before retrying approved deployment
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 15
+      - name: Retry approved Pages deployment
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
         with:
           artifact_name: ftp340-approved-pages
@@ -105,12 +115,22 @@ jobs:
       - name: Redeploy previous Pages artifact
         id: rollback_deploy
         if: always() && steps.rollback_upload.outcome == 'success'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ftp340-rollback-pages
+      - name: Wait before retrying rollback deployment
+        if: always() && steps.rollback_deploy.outcome == 'failure'
+        run: sleep 15
+      - name: Retry previous Pages deployment
+        id: rollback_deploy_retry
+        if: always() && steps.rollback_deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
         with:
           artifact_name: ftp340-rollback-pages
       - name: Verify previous approved version
         id: verify_rollback
-        if: always() && steps.rollback_deploy.outcome == 'success' && steps.prepare.outputs.previous_version != '0'
+        if: always() && (steps.rollback_deploy.outcome == 'success' || steps.rollback_deploy_retry.outcome == 'success') && steps.prepare.outputs.previous_version != '0'
         run: >-
           python scripts/verify_publication.py
           --url "https://ardenisov-code.github.io/ftp340-training/adaptive-plan.json?rollback=${GITHUB_RUN_ID}"
@@ -119,7 +139,7 @@ jobs:
           --attempts 18 --delay 5
       - name: Verify legacy page restoration
         id: verify_legacy_rollback
-        if: always() && steps.rollback_deploy.outcome == 'success' && steps.prepare.outputs.previous_version == '0'
+        if: always() && (steps.rollback_deploy.outcome == 'success' || steps.rollback_deploy_retry.outcome == 'success') && steps.prepare.outputs.previous_version == '0'
         run: >-
           python scripts/verify_publication.py
           --url "https://ardenisov-code.github.io/ftp340-training/?rollback=${GITHUB_RUN_ID}"
