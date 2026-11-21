@@ -1267,6 +1267,7 @@ table.ztab td.calc-power {
   }
 }
 
+
 /* Обзор недели и действия с опубликованной тренировкой */
 
 .training-week-heading {
@@ -1624,4 +1625,11 @@ table.ztab td.calc-power {
   .pane, .status-dot {
     animation: none;
   }
+}
+
+@media (max-width: 360px) {
+  .brand-row { gap: 6px; }
+  .date-chip { white-space: nowrap; font-size: 10px; padding-inline: 7px; }
+  .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .tab { min-width: 0; padding-inline: 1px; white-space: normal; font-size: 10px; line-height: 1.2; letter-spacing: 0; }
 }
