@@ -1,1 +1,43 @@
-{"accepted_events":[{"manifest_sha256":"a8e4eefa49da2b38cf1b69237b7cde5949926e685994ccb2d8046e84b3b14985","nonce":"cd88b8d8df41ba432ed645efb13fbf8a","version_number":1},{"manifest_sha256":"c967d7686b435d0d437dfcfd344b063acd6ba27cb96770a0a80f74d836d10139","nonce":"e970d62e198d9674fedd2086bee51f5d","version_number":2},{"manifest_sha256":"dfdf3075fe38715a174496e24941861ea88f17deb2501a59f30f9aaf79c4c000","nonce":"a6fb753fa161361718332fe74d662665","version_number":3},{"manifest_sha256":"46c125b4a80a612e4177aee74e115736ba148b9dcf89869c4ac2b1247902b24f","nonce":"e2a49f8a102ee79469964b25920998dc","version_number":4},{"manifest_sha256":"7d841ae432c0da6c3a244913ac37d360aa10d16725b40299a3fe6e322622146f","nonce":"a473d031cdb1b4866fdc70031349cdd0","version_number":5},{"manifest_sha256":"4ff391a7d68c08bc335e9ade8b7967115ab8556098d832e8c321298cb2a96ef1","nonce":"86bf4156c4c324e82ead5da7838a9e04","version_number":6},{"manifest_sha256":"7ab40cb4fe55336b9572ea5e0d071f1e66e0ebf3ea346d9753ec027d5805351f","nonce":"2177557ccf79a4c438b29e5d56eaa539","version_number":7}],"current_version":7,"manifest_sha256":"7ab40cb4fe55336b9572ea5e0d071f1e66e0ebf3ea346d9753ec027d5805351f","proposal_id":24,"version_id":33}
+{
+  "accepted_events": [
+    {
+      "manifest_sha256": "a8e4eefa49da2b38cf1b69237b7cde5949926e685994ccb2d8046e84b3b14985",
+      "nonce": "cd88b8d8df41ba432ed645efb13fbf8a",
+      "version_number": 1
+    },
+    {
+      "manifest_sha256": "c967d7686b435d0d437dfcfd344b063acd6ba27cb96770a0a80f74d836d10139",
+      "nonce": "e970d62e198d9674fedd2086bee51f5d",
+      "version_number": 2
+    },
+    {
+      "manifest_sha256": "dfdf3075fe38715a174496e24941861ea88f17deb2501a59f30f9aaf79c4c000",
+      "nonce": "a6fb753fa161361718332fe74d662665",
+      "version_number": 3
+    },
+    {
+      "manifest_sha256": "46c125b4a80a612e4177aee74e115736ba148b9dcf89869c4ac2b1247902b24f",
+      "nonce": "e2a49f8a102ee79469964b25920998dc",
+      "version_number": 4
+    },
+    {
+      "manifest_sha256": "7d841ae432c0da6c3a244913ac37d360aa10d16725b40299a3fe6e322622146f",
+      "nonce": "a473d031cdb1b4866fdc70031349cdd0",
+      "version_number": 5
+    },
+    {
+      "manifest_sha256": "4ff391a7d68c08bc335e9ade8b7967115ab8556098d832e8c321298cb2a96ef1",
+      "nonce": "86bf4156c4c324e82ead5da7838a9e04",
+      "version_number": 6
+    },
+    {
+      "manifest_sha256": "7ab40cb4fe55336b9572ea5e0d071f1e66e0ebf3ea346d9753ec027d5805351f",
+      "nonce": "2177557ccf79a4c438b29e5d56eaa539",
+      "version_number": 7
+    }
+  ],
+  "current_version": 7,
+  "manifest_sha256": "7ab40cb4fe55336b9572ea5e0d071f1e66e0ebf3ea346d9753ec027d5805351f",
+  "proposal_id": 24,
+  "version_id": 33
+}

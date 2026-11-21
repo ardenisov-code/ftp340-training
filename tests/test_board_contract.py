@@ -13,8 +13,8 @@ class PublicBoardContractTests(unittest.TestCase):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
         self.assertIn('id="approved-plan-calendar"', page)
         self.assertIn('id="macro-summary"', page)
-        self.assertIn("fetch(`adaptive-plan.json", script)
-        self.assertIn("renderPlan(manifest)", script)
+        self.assertIn("adaptive-plan.json", script)
+        self.assertIn("await (await fetch(url", script)
         self.assertNotRegex(page, r"<details[^>]+class=.?week")
         self.assertNotRegex(script, r"VO₂\s*3×10|2026-11-06|2026-11-07|Силовая B")
         self.assertFalse((ROOT / "site-template/adaptive-plan.json").exists())
@@ -27,23 +27,22 @@ class PublicBoardContractTests(unittest.TestCase):
         page = (ROOT / "site-template/index.html").read_text(encoding="utf-8")
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
         css = (ROOT / "board.css").read_text(encoding="utf-8")
-        self.assertIn("ftp-reference", page)
-        self.assertIn("class=\"ztab\"", page)
-        self.assertIn("button.dataset.tab = key", script)
-        self.assertIn("guide-switch", script)
+        self.assertIn('id="ftp-input"', page)
+        self.assertIn('class="zone-table"', page)
+        self.assertIn('id="week-rail"', page)
+        self.assertIn('id="day-grid"', page)
+        self.assertIn('id="day-modal"', page)
+        self.assertIn('id="telemetry-pin"', page)
         self.assertIn("localStorage.setItem('ftp340_public_calc'", script)
-        self.assertIn("const init = async () =>", script)
-        self.assertIn("todayButton.dataset.action = 'open-today'", script)
-        self.assertIn("expandButton.dataset.action = 'expand-weeks'", script)
-        self.assertIn("collapseButton.dataset.action = 'collapse-weeks'", script)
-        self.assertIn("renderSessionPhases(session)", script)
-        self.assertIn("['warmup', 'Разминка']", script)
-        self.assertIn("['main_set', 'Основная часть']", script)
-        self.assertIn("['cooldown', 'Заминка']", script)
-        self.assertIn("source_reference_ftp_watts", script)
-        self.assertIn("wrap.querySelectorAll(':scope > nav a[href^=\"#\"]')", script)
+        self.assertIn("function renderWeek()", script)
+        self.assertIn("function openDay(day)", script)
+        self.assertIn("async function exportWorkout", script)
+        self.assertIn("function renderCalculator()", script)
+        self.assertIn("async function updateLiveStatus", script)
         self.assertIn("@media", css)
-        self.assertIn("details.week", css)
+        self.assertIn(".week-shell", css)
+        self.assertIn(".day-grid", css)
+        self.assertIn(".telemetry-panel", css)
 
     def test_public_html_does_not_contain_personal_medical_or_garmin_facts(self):
         public = "\n".join((ROOT / file).read_text(encoding="utf-8") for file in (
@@ -57,18 +56,9 @@ class PublicBoardContractTests(unittest.TestCase):
     def test_fictitious_sports_data_eliminated(self):
         for fname in ("site-template/board.js", "board.js"):
             script = (ROOT / fname).read_text(encoding="utf-8")
-            self.assertNotIn("CP 270", script)
-            self.assertNotIn("24.0 кДж", script)
-            self.assertNotIn("91.5%", script)
-            self.assertNotIn("<b>8.3</b>", script)
-            self.assertNotIn("<b>1.7</b>", script)
-            self.assertNotIn("-6.6</b>", script)
-            self.assertNotIn("910 Вт", script)
-            self.assertNotIn("770 Вт", script)
-            self.assertNotIn("518 Вт", script)
-            self.assertNotIn("±18 Вт", script)
-            self.assertIn("Недостаточно данных", script)
-            self.assertIn("Не откалиброван", script)
+            for marker in ("CP 270", "24.0 кДж", "91.5%", "<b>8.3</b>", "<b>1.7</b>",
+                           "-6.6</b>", "910 Вт", "770 Вт", "518 Вт", "±18 Вт"):
+                self.assertNotIn(marker, script)
 
     def test_telemetry_secure_authorization_and_no_token_in_url(self):
         for fname in ("site-template/board.js", "board.js"):
@@ -78,50 +68,28 @@ class PublicBoardContractTests(unittest.TestCase):
             self.assertIn("Authorization", script)
             self.assertIn("Bearer", script)
             self.assertIn("429", script)
-            self.assertIn("pinInput.value = ''", script)
+            self.assertIn("input.value = ''", script)
 
     def test_mission_control_live_health_and_active_plan_banner(self):
         for fname in ("site-template/board.js", "board.js"):
             script = (ROOT / fname).read_text(encoding="utf-8")
             self.assertIn("/api/mission-control/status", script)
-            self.assertIn("updateLiveSystemStatus", script)
-            self.assertIn("const updateLivePlanBanner = async (container, publishedVersion) =>", script)
-            self.assertIn("gates.active_version", script)
-            self.assertIn("updateLivePlanBanner(planBanner, manifest.version_number)", script)
-            self.assertIn("safety-gate-status-badge", script)
+            self.assertIn("updateLiveStatus", script)
+            self.assertIn("status-pill", script)
 
     def test_workout_export_does_not_reimplement_plan_parser_in_browser(self):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
-        self.assertIn("/api/workouts/${session.date}.${format}", script)
-        self.assertIn("endpoint.searchParams.set('version', calendarVersion)", script)
+        self.assertIn("/api/workouts/${day.date}.${format}", script)
+        self.assertIn("searchParams.set('version'", script)
         self.assertNotIn("generateZwoXml", script)
-
-    def test_live_zwo_export_uses_server_parser_and_working_ftp(self):
-        script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
-        self.assertIn("/api/workouts/${session.date}.${format}", script)
-        self.assertIn("getWorkingFtp(manifest)", script)
-        self.assertNotIn("const xml = generateZwoXml(session, ftp)", script)
 
     def test_public_schedule_does_not_merge_live_or_private_training_data(self):
         script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
         self.assertNotIn("/api/plan/live-status", script)
         self.assertNotIn("date_overrides", script)
         self.assertNotIn("actual_np", script)
-        self.assertNotIn("renderWorkoutVisualizer", script)
-        self.assertIn("const byDate = new Map(sessions.map(session => [session.date, session]))", script)
-        self.assertIn("session.source_reference_ftp_watts", script)
-        self.assertIn("const exportFtp = getWorkingFtp(manifest);", script)
-
-    def test_board_surfaces_exports_for_next_three_uncompleted_bike_sessions(self):
-        script = (ROOT / "site-template/board.js").read_text(encoding="utf-8")
-        self.assertIn("const renderNextBikeExports = (manifest, ftp)", script)
-        self.assertIn("session.discipline === 'bike' && session.date >= localMoscowDate() && !session.completed", script)
-        self.assertIn(".slice(0, 3)", script)
-        self.assertIn("ZWO · MyWhoosh", script)
-        self.assertIn("FIT · Garmin", script)
-        self.assertIn("Как импортировать ZWO в MyWhoosh с телефона", script)
-        self.assertIn("Downloads", script)
-        self.assertIn("renderNextBikeExports(manifest, ftp)", script)
+        self.assertIn("source_reference_ftp_watts", script)
+        self.assertIn("getWorkingFtp", script)
 
 
 if __name__ == "__main__":

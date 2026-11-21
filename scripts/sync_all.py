@@ -73,7 +73,7 @@ def run(cmd: list[str], cwd: Path, label: str, env: dict | None = None) -> bool:
 
 def sync_static_assets() -> None:
     """root → site-template для board.js и index.html."""
-    for name in ("board.js", "index.html"):
+    for name in ("board.js", "index.html", "board.css"):
         root = PAGES_REPO / name
         tmpl = PAGES_REPO / "site-template" / name
         if not root.exists():
@@ -161,7 +161,7 @@ def main() -> int:
         print("⚠ tricoach-bot не найден — тесты бота пропущены.")
 
     # Финальная сверка статических файлов
-    for name in ("board.js", "index.html"):
+    for name in ("board.js", "index.html", "board.css"):
         a = (PAGES_REPO / name).read_bytes()
         b = (PAGES_REPO / "site-template" / name).read_bytes()
         print(f"✓ diff {name} ↔ site-template/{name}: {'IDENTICAL' if a == b else '⚠ DIFFERENT'}")
@@ -177,8 +177,8 @@ def main() -> int:
 
     if args.commit and all_ok:
         for repo, paths, msg in [
-            (PAGES_REPO, ["board.js", "index.html", "site-template/board.js",
-                          "site-template/index.html", "adaptive-plan.json",
+            (PAGES_REPO, ["board.js", "board.css", "index.html", "site-template/board.js",
+                          "site-template/board.css", "site-template/index.html", "adaptive-plan.json",
                           ".ftp340-sync-state.json", "versions/"], "sync: full plan & assets cycle"),
             (BOT_REPO, ["adaptive-plan.json"], "sync: mirror authoritative adaptive-plan.json"),
         ]:
