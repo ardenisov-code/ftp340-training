@@ -1,9 +1,11 @@
 """Exercise the real board rendering functions using the published v7 data."""
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+NODE_BIN = shutil.which("node") or ("/opt/homebrew/bin/node" if Path("/opt/homebrew/bin/node").exists() else "node")
 
 
 class TrackDisplayTests(unittest.TestCase):
@@ -32,7 +34,7 @@ assert.doesNotMatch(text(noTargets), /ЧСС/);
 const ordinary = ctx.uat.weekPresentation({block:'Развитие', block_rationale:'Прогрессия', days:[]});
 assert.equal(ordinary.block, 'Развитие');
 '''
-        subprocess.run(['node', '-e', js], cwd=ROOT, check=True)
+        subprocess.run([NODE_BIN, '-e', js], cwd=ROOT, check=True)
 
 
 if __name__ == '__main__':
